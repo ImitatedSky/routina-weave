@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      沒有任何權限。
+      - 開照片、匯入預設集：系統的檔案選擇器，只拿到使用者當下挑的檔案。
+      - 存照片：Android 10 以上用 MediaStore 寫進相簿（自己新增的檔案不需要權限）；
+        Android 8–9 改用系統的「另存新檔」，同樣不需要儲存權限。
+      - 匯出預設集：系統的「另存新檔」。
+    -->
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.RoutinaTone">
+
+        <!--
+          家族標記：讓 Routina（Hub）掃得到、列進目錄、並能檢查更新。
+          鍵名的定義見 routina repo 的 core/contract/Family.kt。
+        -->
+        <meta-data
+            android:name="com.routina.family.member"
+            android:value="true" />
+        <meta-data
+            android:name="com.routina.family.id"
+            android:value="tone" />
+        <meta-data
+            android:name="com.routina.family.name"
+            android:value="Routina Tone" />
+        <meta-data
+            android:name="com.routina.family.summary"
+            android:value="照片調色" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
