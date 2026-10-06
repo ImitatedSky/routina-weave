@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="17 16 76 76">
+  <!-- 與 Android 圖示（android/app/src/main/res/drawable/ic_launcher_foreground.xml）同一組路徑 -->
+  <rect x="17" y="16" width="76" height="76" rx="18" fill="#FAF8F3"/>
+  <g fill="none" stroke="#4B52B8" stroke-width="5" stroke-linecap="round">
+    <path d="M32,72 C32,62.81 36.74,56.21 43.14,52.12"/>
+    <path d="M56.21,47.39 C66.62,45.96 76.53,49.56 77,58 C78,76 47,80 47,58 C47,44 64,34 77,35"/>
+  </g>
+  <g fill="#4B52B8">
+    <circle cx="32" cy="73" r="6.5"/>
+    <circle cx="78" cy="35" r="6.5"/>
+  </g>
+</svg>

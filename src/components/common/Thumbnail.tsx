@@ -1,30 +1,6 @@
-import { useEffect, useState } from 'react'
-import { getAttachment } from '@/storage/db'
+import { useAttachmentUrl } from './useAttachmentUrl'
 import { cn } from '@/lib/utils'
 import type { Note } from '@/notes/types'
-
-/** 附件 id → object URL。元件卸載時釋放 */
-export function useAttachmentUrl(id: string | undefined): string | undefined {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => {
-    if (!id) {
-      setUrl(undefined)
-      return
-    }
-    let objectUrl: string | undefined
-    let cancelled = false
-    void getAttachment(id).then((a) => {
-      if (cancelled || !a) return
-      objectUrl = URL.createObjectURL(a.blob)
-      setUrl(objectUrl)
-    })
-    return () => {
-      cancelled = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [id])
-  return url
-}
 
 /** 筆記的縮圖：有圖用圖，沒圖退回圖示，再退回網域首字 */
 export function Thumbnail({ note, className }: { note: Note; className?: string }) {

@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- 網頁只有深色，App 也只有深色 -->
-    <style name="Theme.RoutinaTone" parent="android:Theme.Material.NoActionBar">
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      跟著系統深淺色。parent 要分 Light／非 Light：targetSdk 33 以上 WebView 的
+      prefers-color-scheme 是看主題的 isLightTheme 決定的。
+      Android 15 以上強制 edge-to-edge，系統列的顏色設定會被忽略，看到的是視窗底色。
+    -->
+    <style name="Theme.RoutinaWeave" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_background</item>
         <item name="android:statusBarColor">@color/window_background</item>
         <item name="android:navigationBarColor">@color/window_background</item>
+        <!-- 淺色底要深色的系統列圖示 -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
     </style>
 </resources>

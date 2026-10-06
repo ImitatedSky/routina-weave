@@ -46,15 +46,15 @@ val copyWebAssets by tasks.registering(Sync::class) {
 }
 
 android {
-    namespace = "com.routina.tone"
+    namespace = "com.routina.weave"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.routina.tone"
+        applicationId = "com.routina.weave"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 15
-        versionName = "0.12.1"
+        versionCode = 1
+        versionName = "0.1.0"
     }
 
     sourceSets["main"].assets.srcDir(webAssetsDir)

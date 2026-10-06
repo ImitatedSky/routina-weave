@@ -1,0 +1,116 @@
+name: Build APK
+
+# 只在推送版本標籤時跑。平常 push main 只會觸發 deploy.yml（網頁版），
+# 這兩條線互不干擾，日常開發的節奏不受影響。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Signed release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Hub 靠 tag 的版號跟已安裝的 versionName 比對來判斷有沒有新版，
+      # 兩者不一致就會誤判。在這裡擋下來，比事後除錯便宜。
+      - name: Check the tag matches versionName
+        run: |
+          VN=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts | head -1)
+          if [ -z "$VN" ]; then
+            echo "::error::could not read versionName from android/app/build.gradle.kts"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "v$VN" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match versionName $VN (expected v$VN)"
+            exit 1
+          fi
+          echo "tag $GITHUB_REF_NAME matches versionName $VN"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install web dependencies
+        run: npm ci
+
+      # 與網頁版完全相同的建置指令，所以 App 裡的內容永遠跟網頁一致
+      - name: Build web
+        run: npm run build
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          # 這個 action 預設會安裝已被 Google 下架的舊 'tools' 套件，
+          # runner 的 cmdline-tools 升級後 sdkmanager 就找不到它而整步失敗。
+          packages: platform-tools
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./android/gradlew
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 not set; refusing to publish an unsigned release"
+            exit 1
+          fi
+          # 密碼必須是純 ASCII。常見雷：用中文輸入法打密碼時把半形「-」變成全形「－」，
+          # Java 簽章會丟「Password is not ASCII」而且不會說原因。
+          for var in KEYSTORE_PASSWORD KEY_PASSWORD; do
+            if printf '%s' "${!var}" | LC_ALL=C grep -q '[^ -~]'; then
+              echo "::error::$var contains a non-ASCII character (e.g. a full-width dash from an IME). Re-enter it as plain ASCII by copy-paste."
+              exit 1
+            fi
+          done
+          KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$KEYSTORE_PATH"' EXIT
+          # 去掉貼上時可能夾帶的空白／換行，避免 base64 解碼失敗
+          if ! echo "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$KEYSTORE_PATH"; then
+            echo "::error::KEYSTORE_BASE64 is not valid base64 — re-copy the whole base64 file and update the secret"
+            exit 1
+          fi
+          # 先驗 keystore 能以密碼＋別名開啟，給明確錯誤而不是 gradle 的模糊訊息
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::Cannot open keystore — check KEYSTORE_PASSWORD and KEY_ALIAS (alias should be 'routina')"
+            exit 1
+          fi
+          export KEYSTORE_FILE="$KEYSTORE_PATH"
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      # 每個標籤都是獨立且永久保留的 Release。檔名帶 routina-weave- 是為了
+      # 和家族其他成員的 APK 一眼分得出來，Hub 的名冊也靠它比對。
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "routina-weave-${GITHUB_REF_NAME}.apk"
+          gh release create "$GITHUB_REF_NAME" \
+            "routina-weave-${GITHUB_REF_NAME}.apk" \
+            --title "Routina Weave ${GITHUB_REF_NAME}" \
+            --generate-notes

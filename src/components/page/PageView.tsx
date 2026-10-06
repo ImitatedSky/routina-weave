@@ -75,30 +75,38 @@ export function PageView({ note }: { note: Note }) {
  */
 function TitleInput({ note }: { note: Note }) {
   const updateNote = useNotes((s) => s.updateNote)
-  const [title, setTitle] = useState(note.title)
+  // 只有正在編輯時才有草稿；沒在編輯就直接顯示 note.title，
+  // 背景抓回來的網址標題才不會被輸入框裡的舊值蓋掉
+  const [draft, setDraft] = useState<string | null>(null)
   const commit = () => {
-    const next = title.trim() || '未命名'
+    if (draft === null) return
+    const next = draft.trim() || '未命名'
     if (next !== note.title) updateNote(note.id, { title: next })
-    if (next !== title) setTitle(next)
+    setDraft(null)
   }
+  // 換頁時元件卸載，還沒離開欄位的標題也要寫回
   const commitRef = useRef(commit)
-  commitRef.current = commit
+  useEffect(() => {
+    commitRef.current = commit
+  })
   useEffect(() => () => commitRef.current(), [])
 
   return (
-    <input
-      value={title}
-      onChange={(e) => setTitle(e.target.value)}
+    <textarea
+      rows={1}
+      value={draft ?? note.title}
+      onFocus={() => setDraft(note.title)}
+      onChange={(e) => setDraft(e.target.value.replace(/\n/g, ' '))}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault()
-          ;(e.target as HTMLInputElement).blur()
+          ;(e.target as HTMLTextAreaElement).blur()
         }
       }}
       placeholder="未命名"
       aria-label="標題"
-      className="w-full bg-transparent text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50"
+      className="w-full resize-none bg-transparent text-3xl leading-tight font-bold tracking-tight outline-none [field-sizing:content] placeholder:text-muted-foreground/50"
     />
   )
 }

@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RoutinaTone"
+rootProject.name = "RoutinaWeave"
 include(":app")

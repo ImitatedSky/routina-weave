@@ -1,16 +1,18 @@
-package com.routina.tone
+package com.routina.weave
 
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Message
 import android.view.WindowInsets
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -19,16 +21,18 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 
 /**
- * 調色 App 的外殼：整個畫面是一個 WebView，載入打包進 assets 的網頁版（repo 根目錄的
- * Vite 專案）。網頁與 App 共用同一份原始碼，完全離線可用。
+ * 筆記 App 的外殼：整個畫面是一個 WebView，載入打包進 assets 的網頁版（repo 根目錄的
+ * Vite 專案）。網頁與 App 共用同一份原始碼，除了網址預覽之外完全離線可用。
  *
- * 網頁在 App 裡做不到的只有「存檔」：WebView 不處理 blob: 下載，所以存照片與匯出預設集
- * 走 [FileSaver] 這個 JS bridge。
+ * 網頁在 App 裡做不到的事走 JS bridge：
+ * - 存檔（匯出 zip）：WebView 不處理 blob: 下載，見 [FileSaver]。
+ * - 網址預覽：網頁直接 fetch 別的網站會被 CORS 擋，見 [LinkPreviewer]。
  */
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var fileSaver: FileSaver
+    private lateinit var linkPreviewer: LinkPreviewer
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooser = registerForActivityResult(
@@ -46,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
         /*
          * assets 掛在 https://appassets.androidplatform.net 底下而不是 file://：
-         * file:// 是不透明來源，IndexedDB（預設集、目前的編輯都存在這裡）會不可靠。
+         * file:// 是不透明來源，IndexedDB（筆記都存在這裡）會不可靠。
          * 路徑對上網頁版的 Vite base，網頁的建置設定就不用為 App 改。
          */
         val assets = WebViewAssetLoader.AssetsPathHandler(this)
@@ -71,6 +75,8 @@ class MainActivity : ComponentActivity() {
             domStorageEnabled = true
             allowFileAccess = false
             allowContentAccess = false
+            // 開了才會走 onCreateWindow，target="_blank" 與 window.open 才能統一交給瀏覽器
+            setSupportMultipleWindows(true)
         }
 
         webView.webViewClient = object : WebViewClientCompat() {
@@ -83,7 +89,7 @@ class MainActivity : ComponentActivity() {
                 // 外部連結交給瀏覽器，不然會困在沒有網址列的頁面裡
                 val url = request.url
                 if (url.host == WebViewAssetLoader.DEFAULT_DOMAIN) return false
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, url)) }
+                openExternal(url)
                 return true
             }
         }
@@ -105,10 +111,41 @@ class MainActivity : ComponentActivity() {
                     false
                 }
             }
+
+            /*
+             * target="_blank" 與 window.open 會要求開新視窗。window.open 的網址在這裡拿不到，
+             * 所以給它一個不顯示的暫時 WebView，攔下它的第一個導覽交給瀏覽器後丟掉。
+             */
+            override fun onCreateWindow(
+                view: WebView,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: Message
+            ): Boolean {
+                val popup = WebView(view.context)
+                popup.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(popupView: WebView, request: WebResourceRequest): Boolean {
+                        // 自己的頁面就在原本的 WebView 開，暫時 WebView 沒有 assetLoader
+                        if (request.url.host == WebViewAssetLoader.DEFAULT_DOMAIN) {
+                            webView.loadUrl(request.url.toString())
+                        } else {
+                            openExternal(request.url)
+                        }
+                        popupView.post { popupView.destroy() }
+                        return true
+                    }
+                }
+                val transport = resultMsg.obj as WebView.WebViewTransport
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                return true
+            }
         }
 
         fileSaver = FileSaver(this, webView)
         webView.addJavascriptInterface(fileSaver.bridge, FileSaver.BRIDGE_NAME)
+        linkPreviewer = LinkPreviewer(webView)
+        webView.addJavascriptInterface(linkPreviewer.bridge, LinkPreviewer.BRIDGE_NAME)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -121,6 +158,10 @@ class MainActivity : ComponentActivity() {
         } else {
             webView.restoreState(savedInstanceState)
         }
+    }
+
+    private fun openExternal(url: Uri) {
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, url)) }
     }
 
     /**
@@ -148,7 +189,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 不用 params.createIntent()：它把 accept 屬性原封不動當 MIME type，
-     * 「.json」這種副檔名寫法會變成一個什麼檔都選不到的選擇器。
+     * 「.zip」這種副檔名寫法會變成一個什麼檔都選不到的選擇器。
      */
     private fun chooserIntent(params: WebChromeClient.FileChooserParams): Intent {
         val mimeTypes = params.acceptTypes.map { it.trim() }.filter { it.contains('/') }.distinct()
@@ -159,7 +200,7 @@ class MainActivity : ComponentActivity() {
                 type = if (mimeTypes.size == 1) mimeTypes[0] else "*/*"
                 if (mimeTypes.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
             } else {
-                // 有副檔名寫法（.json）時系統無從過濾，全部列出，交給網頁判斷內容
+                // 有副檔名寫法（.zip、.md）時系統無從過濾，全部列出，交給網頁判斷內容
                 type = "*/*"
             }
             if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
@@ -183,7 +224,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val BASE_PATH = "/routina-tone/"
+        private const val BASE_PATH = "/routina-weave/"
         private const val INDEX = "index.html"
     }
 }

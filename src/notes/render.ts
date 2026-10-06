@@ -12,7 +12,7 @@ const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 // 點連結時由 Preview 元件攔下來處理，這裡只負責標記
 md.inline.ruler.before('link', 'wikilink', (state, silent) => {
   const src = state.src.slice(state.pos)
-  const m = /^\[\[([^\[\]\n|]+)(?:\|([^\[\]\n]*))?\]\]/.exec(src)
+  const m = /^\[\[([^[\]\n|]+)(?:\|([^[\]\n]*))?\]\]/.exec(src)
   if (!m) return false
   if (!silent) {
     const token = state.push('wikilink', '', 0)

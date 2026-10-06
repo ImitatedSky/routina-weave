@@ -13,7 +13,7 @@ export const weaveTheme = EditorView.theme({
   '.cm-content': {
     fontFamily: 'var(--font-sans)',
     lineHeight: '1.75',
-    padding: '0 0 40vh',
+    padding: '0 0 1.5rem',
     caretColor: 'var(--primary)',
   },
   '.cm-line': { padding: '0' },
@@ -28,6 +28,95 @@ export const weaveTheme = EditorView.theme({
     border: '1px solid var(--border)',
     borderRadius: '8px',
     overflow: 'hidden',
+  },
+
+  // ---- 自動完成（[[ 與 / 選單）----
+  // 前面加 &.cm-editor 才蓋得過 autocomplete 內建的藍底白字
+  '&.cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul': {
+    fontFamily: 'var(--font-sans)',
+    maxHeight: '18em',
+    minWidth: '220px',
+    padding: '4px',
+  },
+  '&.cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul > li': {
+    padding: '6px 10px',
+    borderRadius: '6px',
+    lineHeight: '1.4',
+  },
+  '&.cm-editor .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    background: 'var(--accent)',
+    color: 'var(--accent-foreground)',
+  },
+  '.cm-completionDetail': {
+    marginLeft: '1em',
+    fontStyle: 'normal',
+    fontSize: '0.85em',
+    color: 'var(--muted-foreground)',
+  },
+  '.cm-completionMatchedText': { textDecoration: 'none', fontWeight: '600' },
+
+  // ---- 即時預覽 ----
+  '.cm-lp-wikilink': {
+    background: 'var(--accent)',
+    color: 'var(--accent-foreground)',
+    borderRadius: '4px',
+    padding: '0 4px',
+    cursor: 'pointer',
+  },
+  '.cm-lp-wikilink.cm-lp-missing': {
+    background: 'transparent',
+    color: 'var(--muted-foreground)',
+    outline: '1px dashed var(--border)',
+    outlineOffset: '-1px',
+  },
+  '.cm-lp-wikilink-raw': { color: 'var(--link)' },
+  '.cm-lp-link': {
+    color: 'var(--link)',
+    textDecoration: 'underline',
+    textUnderlineOffset: '3px',
+    cursor: 'pointer',
+  },
+  '.cm-lp-inline-code': {
+    background: 'var(--muted)',
+    borderRadius: '4px',
+    padding: '0.1em 0.35em',
+  },
+  '.cm-lp-bullet': {
+    display: 'inline-block',
+    width: '1em',
+    textAlign: 'center',
+    color: 'var(--muted-foreground)',
+  },
+  '.cm-lp-task': {
+    width: '1em',
+    height: '1em',
+    margin: '0 0.4em 0 0',
+    verticalAlign: '-0.15em',
+    accentColor: 'var(--primary)',
+    cursor: 'pointer',
+  },
+  '.cm-lp-hr': {
+    display: 'inline-block',
+    width: '100%',
+    verticalAlign: 'middle',
+    borderTop: '1px solid var(--border)',
+  },
+  '.cm-line.cm-lp-quote': {
+    borderLeft: '3px solid var(--border)',
+    paddingLeft: '1em',
+    color: 'var(--muted-foreground)',
+  },
+  '.cm-line.cm-lp-callout': {
+    borderLeft: '4px solid var(--primary)',
+    background: 'var(--accent)',
+    color: 'var(--foreground)',
+  },
+  '.cm-lp-callout-title': { fontWeight: '600' },
+  '.cm-line.cm-lp-codeblock': {
+    background: 'var(--muted)',
+    padding: '0 1em',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.9em',
   },
 })
 

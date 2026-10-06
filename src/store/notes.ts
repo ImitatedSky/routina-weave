@@ -24,19 +24,24 @@ interface NotesState {
   importNotes: (notes: Note[]) => void
 }
 
+let initPromise: Promise<void> | null = null
+
 export const useNotes = create<NotesState>((set, get) => ({
   loaded: false,
   notes: {},
 
-  async init() {
-    if (get().loaded) return
-    let list = await db.loadNotes()
-    if (list.length === 0 && !(await db.getMeta<boolean>('seeded'))) {
-      list = seedNotes()
-      await db.saveNotes(list)
-      await db.setMeta('seeded', true)
-    }
-    set({ loaded: true, notes: Object.fromEntries(list.map((n) => [n.id, n])) })
+  init() {
+    // StrictMode 會呼叫兩次；共用同一個 promise，示範筆記才不會建兩份
+    initPromise ??= (async () => {
+      let list = await db.loadNotes()
+      if (list.length === 0 && !(await db.getMeta<boolean>('seeded'))) {
+        list = seedNotes()
+        await db.saveNotes(list)
+        await db.setMeta('seeded', true)
+      }
+      set({ loaded: true, notes: Object.fromEntries(list.map((n) => [n.id, n])) })
+    })()
+    return initPromise
   },
 
   createNote(init = {}) {

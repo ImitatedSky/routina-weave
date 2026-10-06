@@ -5,7 +5,7 @@ import type { Note } from './types'
  * 標題比對不分大小寫；同名時取最早建立的那則。
  */
 
-const WIKILINK = /\[\[([^\[\]\n|]+)(?:\|([^\[\]\n]*))?\]\]/g
+export const WIKILINK = /\[\[([^[\]\n|]+)(?:\|([^[\]\n]*))?\]\]/g
 
 export interface WikiLink {
   target: string

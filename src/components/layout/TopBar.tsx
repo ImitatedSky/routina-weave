@@ -36,7 +36,7 @@ export function TopBar({ route }: { route: Route }) {
         {note ? (
           pathOf(notes, note.id).map((n, i, all) => (
             <span key={n.id} className="flex min-w-0 items-center gap-1">
-              {i > 0 && <span className="text-muted-foreground/50">/</span>}
+              {i > 0 && <span className="hidden text-muted-foreground/50 sm:inline">/</span>}
               <button
                 onClick={() => navigate({ kind: 'page', id: n.id })}
                 className={`flex min-w-0 items-center gap-1 rounded px-1 py-0.5 hover:bg-muted ${i < all.length - 1 ? 'hidden text-muted-foreground sm:flex' : ''}`}
