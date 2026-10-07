@@ -73,30 +73,31 @@ md.core.ruler.after('inline', 'tasks', (state) => {
   }
 })
 
-// 提示框：> [!note] 標題
+// 提示框：> [!note] 標題。類型後面加 - 是預設收合、+ 是預設展開（Obsidian 的摺疊語法）
 md.core.ruler.after('inline', 'callouts', (state) => {
   const tokens = state.tokens
   for (let i = 0; i < tokens.length - 2; i++) {
     if (tokens[i].type !== 'blockquote_open' || tokens[i + 1].type !== 'paragraph_open') continue
     const inline = tokens[i + 2]
-    const m = /^\[!(\w+)\][ \t]*([^\n]*)/.exec(inline.content)
+    const m = /^\[!(\w+)\]([+-]?)[ \t]*([^\n]*)/.exec(inline.content)
     if (!m || !inline.children) continue
     const type = m[1].toLowerCase()
     tokens[i].attrSet('class', 'callout')
     tokens[i].attrSet('data-type', type)
-    // 第一行換成粗體標題，其餘內容照舊
+    if (m[2]) tokens[i].attrSet('data-fold', m[2] === '-' ? 'closed' : 'open')
+    // 標題獨立成一個區塊，收合時才能只留標題；第一段剩下的內容照舊
+    const title = new state.Token('html_block', '', 0)
+    title.content = `<div class="callout-title">${md.utils.escapeHtml(m[3] || type)}</div>`
+    tokens.splice(i + 1, 0, title)
     const firstBreak = inline.children.findIndex((t) => t.type === 'softbreak' || t.type === 'hardbreak')
-    const rest = firstBreak >= 0 ? inline.children.slice(firstBreak + 1) : []
-    const title = new state.Token('html_inline', '', 0)
-    title.content = `<div class="callout-title">${md.utils.escapeHtml(m[2] || type)}</div>`
-    inline.children = [title, ...rest]
+    inline.children = firstBreak >= 0 ? inline.children.slice(firstBreak + 1) : []
   }
 })
 
 export function renderMarkdown(body: string, ctx: RenderContext): string {
   context = ctx
   const html = md.render(body)
-  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-wikilink', 'data-title', 'data-task', 'data-type'] })
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-wikilink', 'data-title', 'data-task', 'data-type', 'data-fold'] })
 }
 
 /** 把第 index 個待辦的勾選狀態寫回原文 */

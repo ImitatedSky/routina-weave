@@ -180,7 +180,7 @@ function buildDecorations(view: EditorView): DecorationSet {
         switch (node.name) {
           case 'Blockquote': {
             const line = state.doc.lineAt(node.from)
-            const callout = /^(\s*>\s*)(\[!(\w+)\]\s*)(.*)$/.exec(line.text)
+            const callout = /^(\s*>\s*)(\[!(\w+)\][+-]?\s*)(.*)$/.exec(line.text)
             styleLines(node.from, node.to, callout ? calloutLine : quoteLine, from, to)
             if (callout && line.from >= from && !isActive(line.from)) {
               // 跟預覽一樣：第一行是粗體標題，沒寫標題就顯示類型名稱

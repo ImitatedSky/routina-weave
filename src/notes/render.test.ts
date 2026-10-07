@@ -43,3 +43,17 @@ describe('toggleTask', () => {
     expect(toggleTask(body, 0)).toBe('- [x] 一\n```\n- [ ] 假的\n```\n- [x] 二')
   })
 })
+
+describe('摺疊提示框', () => {
+  it('[!note]- 預設收合，標題獨立成一個區塊', () => {
+    const html = renderMarkdown('> [!note]- 標題\n> 內容', ctx)
+    expect(html).toContain('data-fold="closed"')
+    expect(html).toMatch(/<blockquote[^>]*>\s*<div class="callout-title">標題<\/div>\s*<p>內容<\/p>/)
+    expect(html).toContain('內容')
+  })
+
+  it('[!tip]+ 預設展開，沒有 +/- 就不能摺疊', () => {
+    expect(renderMarkdown('> [!tip]+ 標題', ctx)).toContain('data-fold="open"')
+    expect(renderMarkdown('> [!tip] 標題', ctx)).not.toContain('data-fold')
+  })
+})

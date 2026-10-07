@@ -8,7 +8,7 @@ import { autocompletion } from '@codemirror/autocomplete'
 import { weaveTheme, weaveHighlight } from './theme'
 import { livePreview } from './livePreview'
 import { linkSource } from './linkCompletion'
-import { slashSource } from './slashCommands'
+import { slashSource, slashTrigger } from './slashCommands'
 import { toggleWrap } from './format'
 import { MobileToolbar } from './MobileToolbar'
 
@@ -58,6 +58,7 @@ export function MarkdownEditor({ value, onChange, onOpenLink }: MarkdownEditorPr
           markdown({ base: markdownLanguage, addKeymap: false }),
           syntaxHighlighting(weaveHighlight),
           autocompletion({ override: [linkSource, slashSource], icons: false }),
+          slashTrigger,
           livePreview((title) => onOpenLinkRef.current?.(title)),
           weaveTheme,
           EditorView.lineWrapping,

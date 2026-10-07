@@ -22,6 +22,13 @@ export function Preview({ noteId, body }: { noteId: string; body: string }) {
       openLink(wikilink.dataset.title!)
       return
     }
+    // 摺疊區塊只改畫面，不寫回原文（跟 Obsidian 一樣，收合狀態不算內容）
+    const foldTitle = target.closest<HTMLElement>('.callout[data-fold] > .callout-title')
+    if (foldTitle) {
+      const box = foldTitle.parentElement!
+      box.dataset.fold = box.dataset.fold === 'closed' ? 'open' : 'closed'
+      return
+    }
     if (target instanceof HTMLInputElement && target.dataset.task !== undefined) {
       updateNote(noteId, { body: toggleTask(body, Number(target.dataset.task)) })
       return

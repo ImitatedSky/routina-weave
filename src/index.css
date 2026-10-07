@@ -130,5 +130,14 @@
 .markdown img { max-width: 100%; border-radius: 8px; }
 .markdown .callout { border: 1px solid var(--border); border-left: 4px solid var(--primary); background: var(--accent); color: var(--foreground); border-radius: 8px; padding: 0.6em 1em; }
 .markdown .callout-title { font-weight: 600; margin-bottom: 0.2em; }
+.markdown .callout[data-type="tip"] { border-left-color: oklch(0.65 0.14 160); }
 .markdown .callout[data-type="warning"], .markdown .callout[data-type="caution"] { border-left-color: oklch(0.75 0.15 75); }
-.markdown .callout[data-type="danger"] { border-left-color: var(--destructive); }
+.markdown .callout[data-type="danger"], .markdown .callout[data-type="error"] { border-left-color: var(--destructive); }
+.markdown .callout[data-type="question"] { border-left-color: oklch(0.6 0.15 310); }
+.markdown .callout > p:empty { display: none; }
+/* 摺疊區塊：點標題切換，收合時只留標題 */
+.markdown .callout[data-fold] > .callout-title { cursor: pointer; user-select: none; }
+.markdown .callout[data-fold] > .callout-title::before { content: '▾'; display: inline-block; width: 1.1em; transition: transform 0.15s; }
+.markdown .callout[data-fold="closed"] > .callout-title::before { transform: rotate(-90deg); }
+.markdown .callout[data-fold="closed"] > :not(.callout-title) { display: none; }
+.markdown .callout[data-fold="closed"] > .callout-title { margin-bottom: 0; }
