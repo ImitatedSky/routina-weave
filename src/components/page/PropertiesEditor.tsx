@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu'
 import { useNotes, childrenOf } from '@/store/notes'
 import {
-  collectFields, defaultValue, fieldValues, isRating, removeProp, renameProp, typeOf, type Field,
+  collectFields, defaultValue, fieldValues, isRating, propTypeOf, readPropTypes, removeProp, renameProp, setPropType,
+  type FieldType,
 } from '@/notes/database'
 import { CheckboxInput, NumberInput, StarRating, TextInput } from '@/components/database/inputs'
+import { DateInput } from '@/components/database/DateInput'
 import { AddPropertyDialog, RenamePropertyDialog } from '@/components/database/PropertyDialogs'
 import type { Note, PropValue } from '@/notes/types'
 
@@ -26,8 +28,20 @@ export function PropertiesEditor({ note }: { note: Note }) {
 
   const entries = Object.entries(note.props)
   const keys = entries.map(([key]) => key)
-  const setProps = (props: Note['props']) => updateNote(note.id, { props })
-  const setValue = (key: string, value: PropValue) => setProps({ ...note.props, [key]: value })
+  const setValue = (key: string, value: PropValue) => updateNote(note.id, { props: { ...note.props, [key]: value } })
+
+  // 新增時把型別記在 extra.propTypes，空值（例如還沒選的日期）才認得出型別
+  const addProp = (key: string, type: FieldType) =>
+    updateNote(note.id, { props: { ...note.props, [key]: defaultValue(type) }, extra: setPropType(note.extra, key, type) })
+  const deleteProp = (key: string) =>
+    updateNote(note.id, { props: removeProp(note.props, key), extra: setPropType(note.extra, key, undefined) })
+  const renamePropKey = (from: string, to: string) => {
+    const type = readPropTypes(note.extra)[from]
+    updateNote(note.id, {
+      props: renameProp(note.props, from, to),
+      extra: setPropType(setPropType(note.extra, from, undefined), to, type),
+    })
+  }
 
   const addButton = (
     <Button
@@ -56,7 +70,7 @@ export function PropertiesEditor({ note }: { note: Note }) {
                 <PropValueInput
                   name={key}
                   value={value}
-                  field={siblingFields.find((f) => f.key === key)}
+                  type={propTypeOf(note, key, siblingFields.find((f) => f.key === key))}
                   suggestions={fieldValues(siblings, key)}
                   onChange={(v) => setValue(key, v)}
                 />
@@ -72,7 +86,7 @@ export function PropertiesEditor({ note }: { note: Note }) {
                     <Pencil />
                     重新命名
                   </MenuItem>
-                  <MenuItem variant="destructive" onClick={() => setProps(removeProp(note.props, key))}>
+                  <MenuItem variant="destructive" onClick={() => deleteProp(key)}>
                     <Trash2 />
                     刪除屬性
                   </MenuItem>
@@ -89,7 +103,7 @@ export function PropertiesEditor({ note }: { note: Note }) {
         onOpenChange={setAdding}
         existing={keys}
         suggestions={siblingFields.filter((f) => !keys.includes(f.key))}
-        onAdd={(name, type) => setValue(name, defaultValue(type))}
+        onAdd={addProp}
       />
       <RenamePropertyDialog
         name={renaming}
@@ -97,7 +111,7 @@ export function PropertiesEditor({ note }: { note: Note }) {
           if (!open) setRenaming(null)
         }}
         existing={keys}
-        onRename={(from, to) => setProps(renameProp(note.props, from, to))}
+        onRename={renamePropKey}
       />
     </>
   )
@@ -106,23 +120,24 @@ export function PropertiesEditor({ note }: { note: Note }) {
 function PropValueInput({
   name,
   value,
-  field,
+  type,
   suggestions,
   onChange,
 }: {
   name: string
   value: PropValue
-  /** 同一層其他頁面的同名欄位，自己的值是空字串時用它決定型別 */
-  field?: Field
+  type: FieldType
   suggestions: string[]
   onChange: (value: PropValue) => void
 }) {
-  const type = value === '' && field ? field.type : typeOf(value)
   // 外部改了值（例如表格裡編輯）要重新掛載輸入框，才不會顯示舊的草稿
   const key = `${typeof value}:${String(value)}`
 
   if (type === 'checkbox') {
     return <CheckboxInput checked={value === true} onChange={onChange} label={name} />
+  }
+  if (type === 'date') {
+    return <DateInput value={String(value)} onCommit={onChange} label={name} />
   }
   if (type === 'number') {
     const input = <NumberInput key={key} value={value as number | string} onCommit={onChange} label={name} placeholder="空白" />

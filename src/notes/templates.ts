@@ -23,11 +23,14 @@ export function fromTemplate(template: Note, title: string, now = new Date()): P
   for (const [key, value] of Object.entries(template.props)) {
     props[key] = typeof value === 'string' ? fillTemplate(value, title, now) : value
   }
+  // 欄位型別（例如空白的日期欄）記在 extra.propTypes，要跟著屬性一起帶過去
+  const propTypes = template.extra?.propTypes
   return {
     body: fillTemplate(template.body, title, now),
     props,
     tags: [...template.tags],
     icon: template.icon,
     view: template.view,
+    extra: propTypes ? { propTypes: structuredClone(propTypes) } : undefined,
   }
 }

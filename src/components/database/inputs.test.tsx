@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { NumberInput, TextInput } from './inputs'
+import { DateInput } from './DateInput'
 
 describe('TextInput', () => {
   it('Enter 才寫回', () => {
@@ -50,5 +51,26 @@ describe('NumberInput', () => {
     fireEvent.change(input, { target: { value: '4' } })
     fireEvent.blur(input)
     expect(onCommit).toHaveBeenCalledWith(4)
+  })
+})
+
+describe('DateInput', () => {
+  it('選日期、加時間、清除都馬上寫回', async () => {
+    const onCommit = vi.fn()
+    const { rerender } = render(<DateInput value="2026-10-07" onCommit={onCommit} label="截止日" />)
+    fireEvent.click(screen.getByRole('button', { name: /^截止日：/ }))
+
+    fireEvent.change(await screen.findByLabelText('截止日的日期'), { target: { value: '2026-10-08' } })
+    expect(onCommit).toHaveBeenLastCalledWith('2026-10-08')
+
+    fireEvent.click(screen.getByLabelText('加時間'))
+    expect(onCommit.mock.lastCall?.[0]).toMatch(/^2026-10-07 \d{2}:\d{2}$/)
+
+    rerender(<DateInput value="2026-10-07 14:30" onCommit={onCommit} label="截止日" />)
+    fireEvent.change(screen.getByLabelText('截止日的時間'), { target: { value: '09:15' } })
+    expect(onCommit).toHaveBeenLastCalledWith('2026-10-07 09:15')
+
+    fireEvent.click(screen.getByRole('button', { name: '清除' }))
+    expect(onCommit).toHaveBeenLastCalledWith('')
   })
 })

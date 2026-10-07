@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, ListFilter, Plus, X } from 'lucide-react'
+import { Menu as MenuPrimitive } from '@base-ui/react/menu'
+import { ArrowDown, ArrowUp, Check, Columns3, ListFilter, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Menu, MenuContent, MenuTrigger } from '@/components/ui/menu'
 import { useNotes } from '@/store/notes'
 import { navigate } from '@/store/route'
 import { NoteIcon } from '@/components/common/Thumbnail'
 import {
-  FILTER_OP_LABELS, TITLE_KEY, collectFields, defaultValue, fieldValues, filterNotes, formatValue, needsValue,
-  nextSort, opsFor, readTableState, sortNotes, writeTableState,
+  BUILTIN_COLUMNS, FILTER_OP_LABELS, TITLE_KEY, collectFields, columnLabel, defaultValue, fieldValues, filterNotes,
+  formatDate, formatValue, needsValue, nextSort, opsFor, readTableState, setPropType, sortNotes,
+  valueOf, writeTableState,
   type Field, type FieldType, type TableFilter, type TableState,
 } from '@/notes/database'
 import type { Note, PropValue } from '@/notes/types'
 import { CheckboxInput, NumberInput, TextInput } from './inputs'
+import { DateInput } from './DateInput'
 import { AddPropertyDialog } from './PropertyDialogs'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +27,10 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
   const [showFilters, setShowFilters] = useState(false)
   const [addingField, setAddingField] = useState(false)
 
+  const builtins: Field[] = state.columns.map((key) => ({ key, type: 'date', count: items.length }))
+  // 唯讀欄位沒顯示也可以拿來篩選
+  const filterFields: Field[] = [...fields, ...BUILTIN_COLUMNS.map((c) => ({ key: c.key, type: 'date' as const, count: 0 }))]
+
   const save = (next: TableState) => updateNote(parent.id, { extra: writeTableState(parent.extra, next) })
   const setFilters = (filters: TableFilter[]) => save({ ...state, filters })
 
@@ -32,14 +40,22 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
     setShowFilters(true)
   }
 
-  // 新欄位寫進每一個子頁面，表格才看得到
+  // 新欄位寫進每一個子頁面，表格才看得到；型別記在 propTypes，空的日期欄才認得出來
   const addField = (name: string, type: FieldType) => {
     for (const item of items) {
-      if (!(name in item.props)) updateNote(item.id, { props: { ...item.props, [name]: defaultValue(type) } })
+      if (name in item.props) continue
+      updateNote(item.id, {
+        props: { ...item.props, [name]: defaultValue(type) },
+        extra: setPropType(item.extra, name, type),
+      })
     }
   }
 
-  const sortLabel = state.sort && (state.sort.key === TITLE_KEY ? '標題' : state.sort.key)
+  // 照 BUILTIN_COLUMNS 的順序存，切換顯示時欄位不會跳來跳去
+  const toggleColumn = (key: string, shown: boolean) => {
+    const columns = BUILTIN_COLUMNS.map((c) => c.key).filter((k) => (k === key ? shown : state.columns.includes(k)))
+    save({ ...state, columns })
+  }
 
   return (
     <div>
@@ -56,7 +72,7 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
         {state.sort && (
           <Button variant="secondary" size="sm" onClick={() => save({ ...state, sort: null })} aria-label="取消排序">
             {state.sort.dir === 'asc' ? <ArrowUp /> : <ArrowDown />}
-            {sortLabel}
+            {columnLabel(state.sort.key)}
             <X className="text-muted-foreground" />
           </Button>
         )}
@@ -65,6 +81,30 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
             顯示 {rows.length} / {items.length}
           </span>
         )}
+        <Menu>
+          <MenuTrigger render={<Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" />}>
+            <Columns3 />
+            欄位
+          </MenuTrigger>
+          <MenuContent>
+            <div className="px-2 py-1 text-xs text-muted-foreground">顯示唯讀欄位</div>
+            {BUILTIN_COLUMNS.map((c) => (
+              <MenuPrimitive.CheckboxItem
+                key={c.key}
+                checked={state.columns.includes(c.key)}
+                onCheckedChange={(checked) => toggleColumn(c.key, checked)}
+                className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-highlighted:bg-muted pointer-coarse:py-2.5"
+              >
+                <span className="flex size-4 items-center justify-center">
+                  <MenuPrimitive.CheckboxItemIndicator>
+                    <Check className="size-4" />
+                  </MenuPrimitive.CheckboxItemIndicator>
+                </span>
+                {c.label}
+              </MenuPrimitive.CheckboxItem>
+            ))}
+          </MenuContent>
+        </Menu>
       </div>
 
       {showFilters && state.filters.length > 0 && (
@@ -73,7 +113,7 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
             <FilterRow
               key={i}
               filter={filter}
-              fields={fields}
+              fields={filterFields}
               onChange={(next) => setFilters(state.filters.map((f, j) => (j === i ? next : f)))}
               onRemove={() => setFilters(state.filters.filter((_, j) => j !== i))}
             />
@@ -93,9 +133,9 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
               <th className="sticky left-0 z-10 border-y border-r bg-background p-0 pl-2 text-left font-normal sm:pl-0">
                 <SortHeader label="標題" sortKey={TITLE_KEY} state={state} onSort={(sort) => save({ ...state, sort })} />
               </th>
-              {fields.map((f) => (
+              {[...fields, ...builtins].map((f) => (
                 <th key={f.key} className="min-w-28 border-y p-0 text-left font-normal">
-                  <SortHeader label={f.key} sortKey={f.key} state={state} onSort={(sort) => save({ ...state, sort })} />
+                  <SortHeader label={columnLabel(f.key)} sortKey={f.key} state={state} onSort={(sort) => save({ ...state, sort })} />
                 </th>
               ))}
               <th className="w-full border-y p-0 text-left">
@@ -120,6 +160,11 @@ export function TableView({ parent, items }: { parent: Note; items: Note[] }) {
                 {fields.map((f) => (
                   <td key={f.key} className="border-b p-0">
                     <Cell note={row} field={f} suggestions={f.type === 'text' ? fieldValues(items, f.key) : []} />
+                  </td>
+                ))}
+                {builtins.map((f) => (
+                  <td key={f.key} className="border-b px-2 whitespace-nowrap text-muted-foreground tabular-nums">
+                    {formatDate(String(valueOf(row, f.key)))}
                   </td>
                 ))}
                 <td className="border-b" />
@@ -183,6 +228,17 @@ function Cell({ note, field, suggestions }: { note: Note; field: Field; suggesti
   if (field.type === 'checkbox') {
     return <CheckboxInput checked={value === true} onChange={set} label={`${note.title} 的${field.key}`} />
   }
+  if (field.type === 'date') {
+    return (
+      <DateInput
+        value={value === undefined ? '' : String(value)}
+        onCommit={set}
+        label={`${note.title} 的${field.key}`}
+        placeholder=""
+        className="max-w-60 rounded-none"
+      />
+    )
+  }
 
   if (editing) {
     const common = { autoFocus: true, onDone: () => setEditing(false), label: `${note.title} 的${field.key}` }
@@ -220,16 +276,19 @@ function FilterRow({
   onRemove: () => void
 }) {
   const typeOfKey = (key: string): FieldType => fields.find((f) => f.key === key)?.type ?? 'text'
-  const ops = opsFor(typeOfKey(filter.key))
+  const type = typeOfKey(filter.key)
+  const ops = opsFor(type)
   // 手動改過 .md 或欄位型別變了，條件可能不在清單裡，照樣顯示出來
   const opOptions = ops.includes(filter.op) ? ops : [filter.op, ...ops]
   // 欄位被刪掉後條件還在，選單裡也要看得到它
   const missing = filter.key !== TITLE_KEY && !fields.some((f) => f.key === filter.key)
 
+  // 換成不同型別的欄位時，條件值（例如文字換成日期）不能沿用
   const changeKey = (key: string) => {
-    const nextOps = opsFor(typeOfKey(key))
+    const nextType = typeOfKey(key)
+    const nextOps = opsFor(nextType)
     const op = nextOps.includes(filter.op) ? filter.op : nextOps[0]
-    onChange({ key, op, value: needsValue(op) ? filter.value : '' })
+    onChange({ key, op, value: needsValue(op) && nextType === type ? filter.value : '' })
   }
 
   const selectClass =
@@ -240,7 +299,7 @@ function FilterRow({
       <select value={filter.key} onChange={(e) => changeKey(e.target.value)} aria-label="篩選欄位" className={selectClass}>
         <option value={TITLE_KEY}>標題</option>
         {fields.map((f) => (
-          <option key={f.key} value={f.key}>{f.key}</option>
+          <option key={f.key} value={f.key}>{columnLabel(f.key)}</option>
         ))}
         {missing && <option value={filter.key}>{filter.key}</option>}
       </select>
@@ -259,9 +318,10 @@ function FilterRow({
       </select>
       {needsValue(filter.op) && (
         <input
+          type={type === 'date' ? 'date' : 'text'}
           value={filter.value}
           onChange={(e) => onChange({ ...filter, value: e.target.value })}
-          inputMode={typeOfKey(filter.key) === 'number' ? 'decimal' : undefined}
+          inputMode={type === 'number' ? 'decimal' : undefined}
           placeholder="值"
           aria-label="條件值"
           className="h-8 min-w-0 flex-1 basis-24 rounded-md border bg-transparent px-2 text-sm outline-none focus:border-ring pointer-coarse:h-10"

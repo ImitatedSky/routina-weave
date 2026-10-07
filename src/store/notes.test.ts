@@ -58,3 +58,15 @@ describe('notes store', () => {
     expect(pathOf(notes, b2.id).map((n) => n.title)).toEqual(['A', 'B2'])
   })
 })
+
+describe('範本的欄位型別', () => {
+  it('extra.propTypes 跟著範本帶到新頁面，其他 extra 不帶', () => {
+    const { createNote } = useNotes.getState()
+    const tpl = createNote({
+      title: '範本', template: true, props: { 截止日: '' },
+      extra: { propTypes: { 截止日: 'date' }, tableSort: { key: '截止日', dir: 'asc' } },
+    })
+    const child = useNotes.getState().createNote({ title: '新', templateId: tpl.id })
+    expect(child.extra).toEqual({ propTypes: { 截止日: 'date' } })
+  })
+})

@@ -4,6 +4,8 @@ import { useNotes } from '@/store/notes'
 import { seedNotes } from '@/notes/seed'
 import { ChildPages } from '@/components/page/ChildPages'
 import { PropertiesEditor } from '@/components/page/PropertiesEditor'
+import { ListView } from './ListView'
+import { collectFields } from '@/notes/database'
 import type { Note } from '@/notes/types'
 
 // 跟 PageView 一樣每次從 store 拿最新的 note
@@ -64,6 +66,15 @@ describe('ChildPages 表格', () => {
     expect(byTitle('書單').view).toBe('gallery')
   })
 
+  it('勾選顯示建立時間欄，存進 extra.tableColumns', async () => {
+    const books = byTitle('書單')
+    render(<Page id={books.id} part="children" />)
+    fireEvent.click(screen.getByRole('button', { name: '欄位' }))
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: '建立時間' }))
+    expect(byTitle('書單').extra).toEqual({ tableColumns: ['$created'] })
+    expect(screen.getByRole('button', { name: '依「建立時間」排序' })).toBeInTheDocument()
+  })
+
   it('沒有子頁面時只有一行新增', () => {
     const welcome = byTitle('歡迎使用 Weave')
     render(<Page id={welcome.id} part="children" />)
@@ -80,10 +91,31 @@ describe('PropertiesEditor', () => {
     expect(byTitle('人類大歷史').props.評分).toBe(4)
   })
 
+  it('新增日期屬性：值是空字串，型別記在 propTypes', async () => {
+    const welcome = byTitle('歡迎使用 Weave')
+    render(<Page id={welcome.id} part="props" />)
+    fireEvent.click(screen.getByRole('button', { name: '新增屬性' }))
+    fireEvent.change(await screen.findByLabelText('屬性名稱'), { target: { value: '截止日' } })
+    fireEvent.click(screen.getByRole('radio', { name: '日期' }))
+    fireEvent.click(screen.getByRole('button', { name: '新增' }))
+    const page = byTitle('歡迎使用 Weave')
+    expect(page.props).toEqual({ 截止日: '' })
+    expect(page.extra).toEqual({ propTypes: { 截止日: 'date' } })
+    expect(await screen.findByRole('button', { name: '截止日：空白' })).toBeInTheDocument()
+  })
+
   it('沒有屬性時只有新增按鈕', () => {
     const welcome = byTitle('歡迎使用 Weave')
     render(<Page id={welcome.id} part="props" />)
     expect(screen.getByRole('button', { name: '新增屬性' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '屬性' })).toBeNull()
+  })
+})
+
+describe('ListView', () => {
+  it('日期屬性的 chip 用好讀的格式', () => {
+    const page = { ...byTitle('原子習慣'), props: { 讀完: '2025-01-05 14:30' } }
+    render(<ListView items={[page]} fields={collectFields([page])} />)
+    expect(screen.getByText('2025年1月5日（週日） 14:30')).toBeInTheDocument()
   })
 })
