@@ -10,6 +10,7 @@ import { navigate, parseRoute } from '@/store/route'
 import { titleIndex, normalizeTitle } from '@/notes/links'
 import { BG_COLORS, TEXT_COLORS, colorTags, type ColorChoice, type ColorKind } from '@/notes/colors'
 import type { SlashCompletion } from './slashLook'
+import { pickImage } from './imageUpload'
 
 /**
  * Notion 風的 / 選單：在行首或空白後打 /（中文輸入法的全形「／」也算），
@@ -32,7 +33,7 @@ export interface SlashCommand {
   /** 插完接著打開 [[ 自動完成 */
   thenComplete?: boolean
   /** 不是單純插字的指令：建立子頁面、新增網址 */
-  action?: 'subpage' | 'bookmark'
+  action?: 'subpage' | 'bookmark' | 'upload-image'
 }
 
 type SectionName = '基本' | '清單' | '區塊' | '提示框' | '連結與媒體' | '行內格式' | '文字顏色' | '背景顏色' | '日期時間'
@@ -129,7 +130,8 @@ export function slashCommands(now = new Date()): SlashCommand[] {
 
     { label: '網址書籤', look: 'bookmark', section: '連結與媒體', keywords: ['bookmark', 'url', 'web', '網址', '收藏'], hint: '抓標題與縮圖', text: '', placement: 'inline', action: 'bookmark' },
     { label: '連結', look: 'link', section: '連結與媒體', keywords: ['link', 'url', 'href'], hint: '[文字](網址)', text: '[](https://)', cursor: 1, placement: 'inline' },
-    { label: '圖片', look: 'image', section: '連結與媒體', keywords: ['image', 'img', 'picture', 'photo', '照片'], hint: '![](網址)', text: '![](https://)', cursor: 4, placement: 'inline' },
+    { label: '上傳圖片', look: 'upload', section: '連結與媒體', keywords: ['upload', 'image', 'img', 'picture', 'photo', '照片', '圖片', '相簿'], hint: '從裝置挑選', text: '', placement: 'inline', action: 'upload-image' },
+    { label: '圖片網址', look: 'image', section: '連結與媒體', keywords: ['image', 'img', 'picture', 'url', '圖片', '網址'], hint: '![](網址)', text: '![](https://)', cursor: 4, placement: 'inline' },
 
     { label: '粗體', look: 'bold', section: '行內格式', keywords: ['bold', 'strong', 'b'], hint: '**', text: '****', cursor: 2, placement: 'inline' },
     { label: '斜體', look: 'italic', section: '行內格式', keywords: ['italic', 'em', 'i'], hint: '*', text: '**', cursor: 1, placement: 'inline' },
@@ -218,6 +220,11 @@ function applySlash(view: EditorView, cmd: SlashCommand, completion: Completion,
       userEvent: 'input.complete',
     })
     navigate({ kind: 'page', id: note.id })
+    return
+  }
+  if (cmd.action === 'upload-image') {
+    view.dispatch({ changes: { from, to, insert: '' }, annotations: pickedCompletion.of(completion), userEvent: 'input.complete' })
+    pickImage(view)
     return
   }
   if (cmd.action === 'bookmark') {

@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import { normalizeTitle } from './links'
 import { HIGHLIGHT, matchColorOpen } from './colors'
 import { CARD_LANG, cardHtml, parseCard } from './cardlink'
+import { attachmentIdFromSrc } from './images'
 
 /**
  * 預覽模式的 Markdown → HTML。內容可能來自匯入的 zip，一律經過 DOMPurify 才放進畫面。
@@ -98,6 +99,16 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     if (card) return cardHtml(card, md.utils.escapeHtml)
   }
   return defaultFence(tokens, idx, options, env, self)
+}
+
+// 上傳的圖片（_attachments/…）存在本機，src 由 Preview 讀附件後補上；網址圖片照常顯示
+const defaultImage = md.renderer.rules.image!
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  const id = attachmentIdFromSrc(String(token.attrGet('src') ?? ''))
+  if (!id) return defaultImage(tokens, idx, options, env, self)
+  const alt = md.utils.escapeHtml(token.content)
+  return `<img alt="${alt}" data-attachment="${md.utils.escapeHtml(id)}">`
 }
 
 export interface RenderContext {

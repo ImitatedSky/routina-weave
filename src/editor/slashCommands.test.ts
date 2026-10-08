@@ -108,7 +108,7 @@ describe('更多指令', () => {
   })
 
   it('選單有 Notion 的主要區塊', () => {
-    for (const label of ['子頁面', '摺疊區塊', '網址書籤', '圖片', '提示框・注意', '現在時間']) {
+    for (const label of ['子頁面', '摺疊區塊', '網址書籤', '上傳圖片', '圖片網址', '提示框・注意', '現在時間']) {
       expect(commands.some((c) => c.label === label)).toBe(true)
     }
   })

@@ -6,6 +6,7 @@ import * as db from '@/storage/db'
 import { seedNotes } from '@/notes/seed'
 import { cardThumbnails } from '@/notes/cardlink'
 import { coverAttachment } from '@/notes/covers'
+import { bodyImageAttachments } from '@/notes/images'
 
 /**
  * 所有筆記都在記憶體裡（個人筆記量級，幾千則也只有幾 MB），
@@ -123,9 +124,9 @@ export const useNotes = create<NotesState>((set, get) => ({
   },
 }))
 
-/** 這則筆記用到的附件：網址縮圖、封面圖片、內文連結卡片的縮圖 */
+/** 這則筆記用到的附件：網址縮圖、封面圖片、內文連結卡片的縮圖、內文上傳的圖片 */
 export function attachmentsOf(note: Note): string[] {
-  const ids = cardThumbnails(note.body)
+  const ids = [...cardThumbnails(note.body), ...bodyImageAttachments(note.body)]
   if (note.image) ids.push(note.image)
   const cover = coverAttachment(note.cover)
   if (cover) ids.push(cover)

@@ -17,7 +17,7 @@ const TILES: Record<string, string> = {
   bullet: '•', number: '1.', todo: '☑',
   divider: '—', quote: '❝', fold: '▸', code: '</>', table: '▦',
   note: '📝', tip: '💡', info: 'ℹ️', warning: '⚠️', danger: '⛔', question: '❓',
-  bookmark: '🔖', link: '🔗', image: '🖼️',
+  bookmark: '🔖', link: '🔗', image: '🖼️', upload: '📷',
   bold: 'B', italic: 'I', strike: 'S', inlinecode: '`', tag: '#',
   date: '📅', time: '🕒', datetime: '🗓️', highlight: 'A',
 }

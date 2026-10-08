@@ -10,6 +10,8 @@ import { livePreview } from './livePreview'
 import { colorPreview } from './colorPreview'
 import { cardWidgets, cardWidgetStyles } from './cardWidget'
 import { pasteLink } from './pasteLink'
+import { pasteImage } from './imageUpload'
+import { imagePreview, imagePreviewStyles } from './imagePreview'
 import { linkSource } from './linkCompletion'
 import { slashSource, slashTrigger } from './slashCommands'
 import { renderSlashRule, renderSlashTile, slashMenuStyles, slashOptionClass } from './slashLook'
@@ -76,7 +78,10 @@ export function MarkdownEditor({ value, onChange, onOpenLink }: MarkdownEditorPr
           colorPreview,
           cardWidgets,
           cardWidgetStyles,
+          pasteImage,
           pasteLink,
+          imagePreview,
+          imagePreviewStyles,
           weaveTheme,
           EditorView.lineWrapping,
           placeholder('開始寫，或打 / 插入區塊'),
