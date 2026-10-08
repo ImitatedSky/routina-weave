@@ -45,3 +45,21 @@ export function presetCss(cover: string): string | undefined {
 export function coverAttachment(cover: string | undefined): string | undefined {
   return cover && !cover.startsWith(PRESET_PREFIX) ? cover : undefined
 }
+
+/**
+ * 拖曳封面時的新位置（%）。object-fit: cover 時，圖片比框「瘦長」才會上下超出，
+ * 超出的高度就是可以移動的範圍；往下拖是想看上面，所以位置往 0 走。
+ * 圖片比框扁時上下沒有超出，位置不變。
+ */
+export function dragCoverY(
+  startY: number,
+  dy: number,
+  box: { width: number; height: number },
+  image: { width: number; height: number },
+): number {
+  if (!image.width || !image.height || !box.width) return startY
+  const renderedHeight = Math.max(box.height, (box.width * image.height) / image.width)
+  const overflow = renderedHeight - box.height
+  if (overflow <= 0) return startY
+  return Math.min(100, Math.max(0, startY - (dy / overflow) * 100))
+}

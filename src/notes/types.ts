@@ -20,6 +20,8 @@ export interface Note {
   icon?: string
   /** 頁面最上方的封面：附件 id（圖片），或內建的 preset:xxx（漸層、純色），見 covers.ts */
   cover?: string
+  /** 封面圖片的垂直位置 0（頂）～100（底），沒設是 50（置中）。圖片比封面框高時才有差 */
+  coverY?: number
   tags: string[]
   /** 網址筆記才有 */
   url?: string

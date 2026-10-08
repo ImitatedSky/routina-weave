@@ -1,29 +1,108 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Trash2, Upload } from 'lucide-react'
+import { Image as ImageIcon, ImagePlus, MoreHorizontal, Move, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu'
+import { cn } from '@/lib/utils'
 import { CoverImage } from '@/components/common/CoverImage'
 import { useNotes, releaseAttachments } from '@/store/notes'
 import { putAttachment } from '@/storage/db'
 import { resizeImage } from '@/lib/resizeImage'
-import { COVER_PRESETS, coverAttachment, presetCover } from '@/notes/covers'
+import { COVER_PRESETS, coverAttachment, dragCoverY, presetCover } from '@/notes/covers'
 import type { Note } from '@/notes/types'
 
-/** 頁面最上方的封面（像 Notion）。有封面時右下角有「更換」「移除」 */
+/**
+ * 頁面最上方的封面（像 Notion）。右下角只有一顆「⋯」，點開才是更換、調整位置、移除。
+ * 調整位置：上下拖曳圖片，按「儲存位置」才寫回，「取消」恢復原本的位置。
+ */
 export function PageCover({ note, onPick }: { note: Note; onPick: () => void }) {
+  const [repositioning, setRepositioning] = useState(false)
+  const [draftY, setDraftY] = useState(50)
+  const box = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ startY: number; startPointer: number } | null>(null)
+
   if (!note.cover) return null
+  const isImage = !!coverAttachment(note.cover)
+
+  const startReposition = () => {
+    setDraftY(note.coverY ?? 50)
+    setRepositioning(true)
+  }
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!repositioning) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    drag.current = { startY: draftY, startPointer: e.clientY }
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    const img = box.current?.querySelector('img')
+    if (!drag.current || !img || !box.current) return
+    const { width, height } = box.current.getBoundingClientRect()
+    const dy = e.clientY - drag.current.startPointer
+    setDraftY(dragCoverY(drag.current.startY, dy, { width, height }, { width: img.naturalWidth, height: img.naturalHeight }))
+  }
+  const onPointerUp = () => {
+    drag.current = null
+  }
+
+  const save = () => {
+    useNotes.getState().updateNote(note.id, { coverY: Math.round(draftY) })
+    setRepositioning(false)
+  }
+
+  const overlayButton = 'bg-background/85 backdrop-blur'
+
   return (
-    <div className="group relative">
-      <CoverImage cover={note.cover} className="block h-36 w-full sm:h-52" />
-      <div className="absolute right-3 bottom-3 flex gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-        <Button size="sm" variant="secondary" className="bg-background/85 backdrop-blur" onClick={onPick}>
-          更換封面
-        </Button>
-        <Button size="sm" variant="secondary" className="bg-background/85 backdrop-blur" onClick={() => setCover(note, undefined)} aria-label="移除封面">
-          <Trash2 />
-        </Button>
-      </div>
+    <div
+      ref={box}
+      className={cn('group relative select-none', repositioning && 'cursor-grab touch-none active:cursor-grabbing')}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      <CoverImage cover={note.cover} y={repositioning ? draftY : note.coverY} className="block h-36 w-full sm:h-52" />
+
+      {repositioning ? (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+            <span className="rounded-full bg-black/55 px-3 py-1.5 text-sm text-white">上下拖曳圖片調整位置</span>
+          </div>
+          <div className="absolute right-3 bottom-3 flex gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+            <Button size="sm" variant="secondary" className={overlayButton} onClick={() => setRepositioning(false)}>
+              取消
+            </Button>
+            <Button size="sm" onClick={save}>
+              儲存位置
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="absolute right-3 bottom-3 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:has-[[aria-expanded=true]]:opacity-100">
+          <Menu>
+            <MenuTrigger render={<Button size="icon-sm" variant="secondary" className={overlayButton} aria-label="封面選項" />}>
+              <MoreHorizontal />
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem onClick={onPick}>
+                <ImageIcon />
+                更換封面
+              </MenuItem>
+              {isImage && (
+                <MenuItem onClick={startReposition}>
+                  <Move />
+                  調整位置
+                </MenuItem>
+              )}
+              <MenuItem variant="destructive" onClick={() => setCover(note, undefined)}>
+                <Trash2 />
+                移除封面
+              </MenuItem>
+            </MenuContent>
+          </Menu>
+        </div>
+      )}
     </div>
   )
 }
@@ -41,7 +120,8 @@ export function AddCoverButton({ onPick }: { onPick: () => void }) {
 function setCover(note: Note, cover: string | undefined) {
   const { updateNote } = useNotes.getState()
   const old = coverAttachment(note.cover)
-  updateNote(note.id, { cover })
+  // 換了一張圖，舊的位置就不適用了
+  updateNote(note.id, { cover, coverY: undefined })
   // 舊的封面圖片沒有別的頁面在用就刪掉
   if (old && old !== cover) releaseAttachments(useNotes.getState().notes, [old])
 }

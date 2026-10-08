@@ -15,7 +15,7 @@ export function GalleryView({ items, fields }: { items: Note[]; fields: Field[] 
           className="flex flex-col overflow-hidden rounded-xl border bg-card text-left hover:bg-muted/50"
         >
           {n.cover ? (
-            <CoverImage cover={n.cover} className="block aspect-[1.91] w-full" />
+            <CoverImage cover={n.cover} y={n.coverY} className="block aspect-[1.91] w-full" />
           ) : n.image ? (
             <Thumbnail note={n} className="aspect-[1.91] w-full rounded-none" />
           ) : (

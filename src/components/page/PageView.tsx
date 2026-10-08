@@ -53,7 +53,8 @@ export function PageView({ note }: { note: Note }) {
         )}
 
         {/* 有封面時圖示往上疊在封面下緣，像 Notion */}
-        <div className={cn('relative z-10 mb-2 flex items-end gap-1', note.cover && !note.template && '-mt-7 sm:-mt-9')}>
+        {/* 這一列疊到封面上時是透明的，不能擋住封面右下角的「⋯」，所以只讓圖示和按鈕接收點擊 */}
+        <div className={cn('pointer-events-none relative z-10 mb-2 flex items-end gap-1 *:pointer-events-auto', note.cover && !note.template && '-mt-7 sm:-mt-9')}>
           <div className={cn(note.cover && 'rounded-xl bg-background p-1')}>
             <IconPicker value={note.icon} onChange={(icon) => updateNote(note.id, { icon })} />
           </div>
