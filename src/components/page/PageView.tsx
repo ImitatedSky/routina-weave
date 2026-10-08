@@ -8,14 +8,17 @@ import { IconPicker } from './IconPicker'
 import { PropertiesEditor } from './PropertiesEditor'
 import { ChildPages } from './ChildPages'
 import { Backlinks } from './Backlinks'
+import { AddCoverButton, CoverPicker, PageCover } from './PageCover'
 import { useOpenLink } from './useOpenLink'
 import { Thumbnail } from '@/components/common/Thumbnail'
 import type { Note } from '@/notes/types'
+import { cn } from '@/lib/utils'
 
 export function PageView({ note }: { note: Note }) {
   const mode = useUi((s) => s.mode)
   const updateNote = useNotes((s) => s.updateNote)
   const openLink = useOpenLink()
+  const [pickingCover, setPickingCover] = useState(false)
 
   // 內文打字時不要每個字都寫 IndexedDB；換頁或離開時把最後一次送出去。
   // pending 記住是哪一頁的內容：換頁時 cleanup 跑在新頁面 render 之後，不能用當下的 note.id
@@ -39,33 +42,41 @@ export function PageView({ note }: { note: Note }) {
   }
 
   return (
-    <article className="mx-auto w-full max-w-3xl px-4 pt-6 pb-24 sm:px-8 sm:pt-10">
-      {note.template && (
-        <div className="mb-4 rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
-          這是範本。可以用 <code>{'{{title}}'}</code>、<code>{'{{date}}'}</code>、<code>{'{{time}}'}</code>，新增頁面時會換成實際的值。
-        </div>
-      )}
-
-      <div className="mb-2">
-        <IconPicker value={note.icon} onChange={(icon) => updateNote(note.id, { icon })} />
-      </div>
-      <TitleInput key={note.id} note={note} />
-
-      {note.url && <LinkCard note={note} />}
-
-      <PropertiesEditor note={note} />
-
-      <div className="mt-4">
-        {mode === 'edit' ? (
-          <MarkdownEditor key={note.id} value={note.body} onChange={onBodyChange} onOpenLink={openLink} />
-        ) : (
-          <Preview noteId={note.id} body={note.body} />
+    <>
+      <PageCover note={note} onPick={() => setPickingCover(true)} />
+      <CoverPicker note={note} open={pickingCover} onOpenChange={setPickingCover} />
+      <article className={cn('mx-auto w-full max-w-3xl px-4 pb-24 sm:px-8', note.cover ? 'pt-0' : 'pt-6 sm:pt-10')}>
+        {note.template && (
+          <div className={cn('mb-4 rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground', note.cover && 'mt-4')}>
+            這是範本。可以用 <code>{'{{title}}'}</code>、<code>{'{{date}}'}</code>、<code>{'{{time}}'}</code>，新增頁面時會換成實際的值。
+          </div>
         )}
-      </div>
 
-      {!note.template && <ChildPages note={note} />}
-      {!note.template && <Backlinks note={note} />}
-    </article>
+        {/* 有封面時圖示往上疊在封面下緣，像 Notion */}
+        <div className={cn('relative z-10 mb-2 flex items-end gap-1', note.cover && !note.template && '-mt-7 sm:-mt-9')}>
+          <div className={cn(note.cover && 'rounded-xl bg-background p-1')}>
+            <IconPicker value={note.icon} onChange={(icon) => updateNote(note.id, { icon })} />
+          </div>
+          {!note.cover && <AddCoverButton onPick={() => setPickingCover(true)} />}
+        </div>
+        <TitleInput key={note.id} note={note} />
+
+        {note.url && <LinkCard note={note} />}
+
+        <PropertiesEditor note={note} />
+
+        <div className="mt-4">
+          {mode === 'edit' ? (
+            <MarkdownEditor key={note.id} value={note.body} onChange={onBodyChange} onOpenLink={openLink} />
+          ) : (
+            <Preview noteId={note.id} body={note.body} />
+          )}
+        </div>
+
+        {!note.template && <ChildPages note={note} />}
+        {!note.template && <Backlinks note={note} />}
+      </article>
+    </>
   )
 }
 

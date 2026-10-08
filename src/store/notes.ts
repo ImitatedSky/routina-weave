@@ -5,6 +5,7 @@ import { fromTemplate } from '@/notes/templates'
 import * as db from '@/storage/db'
 import { seedNotes } from '@/notes/seed'
 import { cardThumbnails } from '@/notes/cardlink'
+import { coverAttachment } from '@/notes/covers'
 
 /**
  * 所有筆記都在記憶體裡（個人筆記量級，幾千則也只有幾 MB），
@@ -101,15 +102,11 @@ export const useNotes = create<NotesState>((set, get) => ({
     const notes = get().notes
     const ids = [id, ...descendants(notes, id)]
     const next = { ...notes }
-    const images: string[] = []
-    for (const n of ids) {
-      if (next[n]?.image) images.push(next[n].image!)
-      if (next[n]) images.push(...cardThumbnails(next[n].body))
-      delete next[n]
-    }
+    const attachments = ids.flatMap((n) => (next[n] ? attachmentsOf(next[n]) : []))
+    for (const n of ids) delete next[n]
     set({ notes: next })
     void db.deleteNotes(ids)
-    for (const image of images) void db.deleteAttachment(image)
+    releaseAttachments(next, attachments)
     return ids
   },
 
@@ -125,6 +122,25 @@ export const useNotes = create<NotesState>((set, get) => ({
     void db.saveNotes(list)
   },
 }))
+
+/** 這則筆記用到的附件：網址縮圖、封面圖片、內文連結卡片的縮圖 */
+export function attachmentsOf(note: Note): string[] {
+  const ids = cardThumbnails(note.body)
+  if (note.image) ids.push(note.image)
+  const cover = coverAttachment(note.cover)
+  if (cover) ids.push(cover)
+  return ids
+}
+
+/**
+ * 刪掉已經沒有筆記在用的附件。同一張圖可能被好幾則共用
+ * （例如範本的封面會帶到用範本建立的頁面），所以刪之前要先確認。
+ */
+export function releaseAttachments(notes: Record<string, Note>, ids: string[]) {
+  if (!ids.length) return
+  const inUse = new Set(Object.values(notes).flatMap(attachmentsOf))
+  for (const id of new Set(ids)) if (!inUse.has(id)) void db.deleteAttachment(id)
+}
 
 function nextOrder(notes: Record<string, Note>, parent: string | null): number {
   let max = -1

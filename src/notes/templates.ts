@@ -30,6 +30,7 @@ export function fromTemplate(template: Note, title: string, now = new Date()): P
     props,
     tags: [...template.tags],
     icon: template.icon,
+    cover: template.cover,
     view: template.view,
     extra: propTypes ? { propTypes: structuredClone(propTypes) } : undefined,
   }

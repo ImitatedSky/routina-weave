@@ -18,6 +18,8 @@ export interface Note {
   /** 同一層內的排序，小的在前 */
   order: number
   icon?: string
+  /** 頁面最上方的封面：附件 id（圖片），或內建的 preset:xxx（漸層、純色），見 covers.ts */
+  cover?: string
   tags: string[]
   /** 網址筆記才有 */
   url?: string

@@ -24,6 +24,7 @@ export function seedNotes(): Note[] {
 
   const welcome = make({
     title: '歡迎使用 Weave',
+    cover: 'preset:ocean',
     icon: '🧶',
     pinned: true,
     body: `Weave 把筆記織成一張網。每則筆記都是一個 Markdown 檔，可以整包匯出。
@@ -64,6 +65,7 @@ export function seedNotes(): Note[] {
 
   const books = make({
     title: '書單',
+    cover: 'preset:sand',
     icon: '📚',
     view: 'table',
     childTemplate: bookTemplate.id,
@@ -75,6 +77,7 @@ export function seedNotes(): Note[] {
 
   const atomic = make({
     title: '原子習慣',
+    cover: 'preset:peach',
     icon: '⚛️',
     parent: books.id,
     props: { 作者: 'James Clear', 狀態: '讀完', 評分: 5 },
@@ -91,6 +94,7 @@ export function seedNotes(): Note[] {
 
   const deepWork = make({
     title: '深度工作',
+    cover: 'preset:night',
     icon: '🎯',
     parent: books.id,
     props: { 作者: 'Cal Newport', 狀態: '閱讀中', 評分: 4 },
@@ -104,6 +108,7 @@ export function seedNotes(): Note[] {
 
   const sapiens = make({
     title: '人類大歷史',
+    cover: 'preset:forest',
     icon: '🦴',
     parent: books.id,
     props: { 作者: 'Yuval Noah Harari', 狀態: '想讀', 評分: 0 },
@@ -112,6 +117,7 @@ export function seedNotes(): Note[] {
 
   const bookmarks = make({
     title: '網址收藏',
+    cover: 'preset:dusk',
     icon: '🔖',
     view: 'gallery',
     body: `貼上網址就會變成一則筆記，自動抓標題與縮圖。底下切成卡片可以看縮圖，切成清單比較精簡。

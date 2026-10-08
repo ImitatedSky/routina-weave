@@ -17,7 +17,7 @@ import type { Note, PropValue } from './types'
  */
 
 const KNOWN_KEYS = [
-  'id', 'title', 'parent', 'order', 'icon', 'tags', 'url', 'site', 'description',
+  'id', 'title', 'parent', 'order', 'icon', 'cover', 'tags', 'url', 'site', 'description',
   'image', 'props', 'template', 'childTemplate', 'view', 'pinned', 'created', 'updated',
 ] as const
 
@@ -30,6 +30,7 @@ export function toMarkdown(note: Note): string {
     parent: note.parent,
     order: note.order,
     icon: note.icon,
+    cover: note.cover,
     tags: note.tags.length ? note.tags : undefined,
     url: note.url,
     site: note.site,
@@ -77,6 +78,7 @@ export function fromMarkdown(text: string, fallbackTitle = '未命名'): Note | 
     parent: str(meta.parent) ?? null,
     order: typeof meta.order === 'number' ? meta.order : 0,
     icon: str(meta.icon),
+    cover: str(meta.cover),
     tags: Array.isArray(meta.tags) ? meta.tags.map(String) : [],
     url: str(meta.url),
     site: str(meta.site),

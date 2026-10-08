@@ -5,6 +5,7 @@ import { useNotes } from '@/store/notes'
 import { useUi } from '@/store/ui'
 import { navigate } from '@/store/route'
 import { Thumbnail } from '@/components/common/Thumbnail'
+import { CoverImage } from '@/components/common/CoverImage'
 import { NoteRow } from './NoteRow'
 import { cn } from '@/lib/utils'
 
@@ -59,7 +60,11 @@ export function BookmarksView() {
               onClick={() => navigate({ kind: 'page', id: n.id })}
               className="overflow-hidden rounded-xl border bg-card text-left hover:bg-muted/50"
             >
-              <Thumbnail note={n} className="aspect-[1.91] w-full rounded-none" />
+              {n.cover ? (
+                <CoverImage cover={n.cover} className="block aspect-[1.91] w-full" />
+              ) : (
+                <Thumbnail note={n} className="aspect-[1.91] w-full rounded-none" />
+              )}
               <div className="p-2">
                 <div className="line-clamp-2 text-sm font-medium">{n.title}</div>
                 <div className="truncate text-xs text-muted-foreground">{n.site}</div>

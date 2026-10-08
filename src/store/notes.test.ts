@@ -70,3 +70,24 @@ describe('範本的欄位型別', () => {
     expect(child.extra).toEqual({ propTypes: { 截止日: 'date' } })
   })
 })
+
+describe('封面與附件', () => {
+  it('範本的封面帶到新頁面', () => {
+    const { createNote } = useNotes.getState()
+    const tpl = createNote({ title: '範本', template: true, cover: 'preset:sand' })
+    expect(useNotes.getState().createNote({ title: '新', templateId: tpl.id }).cover).toBe('preset:sand')
+  })
+
+  it('刪頁面時，別的頁面還在用的封面圖片不刪', async () => {
+    const db = await import('@/storage/db')
+    await db.putAttachment({ id: 'img1', blob: new Blob(['x']), type: 'image/jpeg' })
+    const { createNote } = useNotes.getState()
+    const a = createNote({ title: 'A', cover: 'img1' })
+    const b = useNotes.getState().createNote({ title: 'B', cover: 'img1' })
+    useNotes.getState().deleteNote(a.id)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(await db.getAttachment('img1')).toBeDefined()
+    useNotes.getState().deleteNote(b.id)
+    await vi.waitFor(async () => expect(await db.getAttachment('img1')).toBeUndefined())
+  })
+})
