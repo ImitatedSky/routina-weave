@@ -7,8 +7,10 @@ import { syntaxHighlighting } from '@codemirror/language'
 import { autocompletion } from '@codemirror/autocomplete'
 import { weaveTheme, weaveHighlight } from './theme'
 import { livePreview } from './livePreview'
+import { colorPreview } from './colorPreview'
 import { linkSource } from './linkCompletion'
 import { slashSource, slashTrigger } from './slashCommands'
+import { renderSlashRule, renderSlashTile, slashMenuStyles, slashOptionClass } from './slashLook'
 import { toggleWrap } from './format'
 import { MobileToolbar } from './MobileToolbar'
 
@@ -57,14 +59,26 @@ export function MarkdownEditor({ value, onChange, onOpenLink }: MarkdownEditorPr
           ]),
           markdown({ base: markdownLanguage, addKeymap: false }),
           syntaxHighlighting(weaveHighlight),
-          autocompletion({ override: [linkSource, slashSource], icons: false }),
+          autocompletion({
+            override: [linkSource, slashSource],
+            icons: false,
+            optionClass: slashOptionClass,
+            addToOptions: [
+              { render: renderSlashTile, position: 20 },
+              { render: renderSlashRule, position: 90 },
+            ],
+          }),
+          EditorView.theme(slashMenuStyles),
           slashTrigger,
           livePreview((title) => onOpenLinkRef.current?.(title)),
+          colorPreview,
           weaveTheme,
           EditorView.lineWrapping,
           placeholder('開始寫，或打 / 插入區塊'),
-          // 手機底部有工具列，捲動游標時別讓它被擋住
-          coarse ? EditorView.scrollMargins.of(() => ({ bottom: 64 })) : [],
+          // 手機底部有工具列，捲動游標時別讓它被擋住。只扣掉編輯器真的被工具列蓋住的那一段：
+          // CodeMirror 也用這個值判斷選單要不要顯示，固定扣 64px 的話，游標在最後幾行時
+          // 會被當成「看不到」而把 / 選單藏起來
+          coarse ? EditorView.scrollMargins.of(toolbarOverlap) : [],
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString())
             if (update.focusChanged) setFocused(update.view.hasFocus)
@@ -87,4 +101,13 @@ export function MarkdownEditor({ value, onChange, onOpenLink }: MarkdownEditorPr
       {focused && <MobileToolbar viewRef={viewRef} />}
     </>
   )
+}
+
+/** 底部工具列（約 56px 高，鍵盤彈出時 Android 殼會縮小視窗，所以以視窗底部為準）蓋住編輯器的高度 */
+const TOOLBAR_HEIGHT = 56
+
+function toolbarOverlap(view: EditorView) {
+  const bottom = view.scrollDOM.getBoundingClientRect().bottom
+  const viewportBottom = window.visualViewport?.height ?? window.innerHeight
+  return { bottom: Math.max(0, bottom - (viewportBottom - TOOLBAR_HEIGHT)) }
 }

@@ -1,4 +1,5 @@
 import { EditorSelection, type ChangeSpec, type StateCommand, type Text } from '@codemirror/state'
+import { matchColorOpen } from '@/notes/colors'
 
 /** pos 往前（dir = -1）或往後（dir = 1）連續幾個 * ，最多數到 3 */
 function starRun(doc: Text, pos: number, dir: -1 | 1): number {
@@ -104,4 +105,74 @@ export function taskToggle(line: string): { offset: number; insert: string } | n
   const m = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])\]/.exec(line)
   if (!m) return null
   return { offset: m[1].length, insert: m[2] === ' ' ? 'x' : ' ' }
+}
+
+/**
+ * 上色：有選字就把選取範圍包起來，沒有就插入一對空標籤、游標放中間。
+ * 選取範圍已經有顏色時先拿掉舊的，不會一層包一層。
+ */
+export function wrapColor(open: string, close: string): StateCommand {
+  return ({ state, dispatch }) => {
+    const tr = state.changeByRange((range) => {
+      const existing = colorAround(state.doc.lineAt(range.from).text, state.doc.lineAt(range.from).from, range.from, range.to)
+      if (existing) {
+        return {
+          changes: [
+            { from: existing.openFrom, to: existing.openTo, insert: open },
+            { from: existing.closeFrom, to: existing.closeTo, insert: close },
+          ],
+          range: EditorSelection.range(
+            range.from - (existing.openTo - existing.openFrom) + open.length,
+            range.to - (existing.openTo - existing.openFrom) + open.length,
+          ),
+        }
+      }
+      return {
+        changes: [
+          { from: range.from, insert: open },
+          { from: range.to, insert: close },
+        ],
+        range: EditorSelection.range(range.from + open.length, range.to + open.length),
+      }
+    })
+    dispatch(state.update(tr, { scrollIntoView: true, userEvent: 'input' }))
+    return true
+  }
+}
+
+/** 拿掉游標（或選取範圍）所在的顏色標籤，字留著 */
+export const clearColor: StateCommand = ({ state, dispatch }) => {
+  const range = state.selection.main
+  const line = state.doc.lineAt(range.from)
+  const existing = colorAround(line.text, line.from, range.from, range.to)
+  if (!existing) return false
+  const openLen = existing.openTo - existing.openFrom
+  dispatch(
+    state.update({
+      changes: [
+        { from: existing.openFrom, to: existing.openTo },
+        { from: existing.closeFrom, to: existing.closeTo },
+      ],
+      selection: EditorSelection.range(range.from - openLen, range.to - openLen),
+      userEvent: 'delete',
+    }),
+  )
+  return true
+}
+
+/** 同一行裡把 from..to 包住的那組顏色標籤（文件中的絕對位置） */
+export function colorAround(text: string, lineFrom: number, from: number, to: number) {
+  for (let i = text.indexOf('<'); i >= 0; i = text.indexOf('<', i + 1)) {
+    const open = matchColorOpen(text.slice(i))
+    if (!open) continue
+    const closeTag = `</${open.tag}>`
+    const close = text.indexOf(closeTag, i + open.length)
+    if (close < 0) continue
+    const innerFrom = lineFrom + i + open.length
+    const innerTo = lineFrom + close
+    if (from >= innerFrom && to <= innerTo) {
+      return { openFrom: lineFrom + i, openTo: innerFrom, closeFrom: innerTo, closeTo: innerTo + closeTag.length }
+    }
+  }
+  return null
 }

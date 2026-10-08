@@ -151,3 +151,23 @@ describe('slashTrigger', () => {
     view.destroy()
   })
 })
+
+describe('顏色指令', () => {
+  it('文字顏色與背景顏色各一組，插入一對標籤、游標在中間', () => {
+    const red = byLabel('紅色文字')
+    expect(red.look).toBe('text-red')
+    expect(slashEdit(red, '', true)).toEqual({ insert: '<span style="color:#e5484d"></span>', cursor: '<span style="color:#e5484d">'.length })
+    expect(byLabel('黃底').text.startsWith('<mark style="background:')).toBe(true)
+    expect(slashEdit(byLabel('螢光標記'), '', true)).toEqual({ insert: '====', cursor: 2 })
+  })
+
+  it('打「顏色」或 color 找得到整組', () => {
+    expect(filterSlashCommands(commands, '顏色').length).toBeGreaterThanOrEqual(9)
+    expect(labels(filterSlashCommands(commands, 'red'))).toEqual(['紅色文字', '紅底'])
+  })
+
+  it('每一項都有外觀', () => {
+    for (const c of commands) expect(c.look).toBeTruthy()
+  })
+})
+

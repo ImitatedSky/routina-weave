@@ -8,6 +8,8 @@ import { useNotes } from '@/store/notes'
 import { useUi } from '@/store/ui'
 import { navigate, parseRoute } from '@/store/route'
 import { titleIndex, normalizeTitle } from '@/notes/links'
+import { BG_COLORS, TEXT_COLORS, colorTags, type ColorChoice, type ColorKind } from '@/notes/colors'
+import type { SlashCompletion } from './slashLook'
 
 /**
  * Notion 風的 / 選單：在行首或空白後打 /（中文輸入法的全形「／」也算），
@@ -15,6 +17,8 @@ import { titleIndex, normalizeTitle } from '@/notes/links'
  */
 export interface SlashCommand {
   label: string
+  /** 選單裡的外觀（預覽方塊與名稱樣式），見 slashLook.ts */
+  look: string
   section: SectionName
   /** 英文關鍵字，跟中文名稱一起拿來篩選 */
   keywords: string[]
@@ -31,7 +35,7 @@ export interface SlashCommand {
   action?: 'subpage' | 'bookmark'
 }
 
-type SectionName = '基本' | '清單' | '區塊' | '提示框' | '連結與媒體' | '行內格式' | '日期時間'
+type SectionName = '基本' | '清單' | '區塊' | '提示框' | '連結與媒體' | '行內格式' | '文字顏色' | '背景顏色' | '日期時間'
 
 // 選單依 Notion 的分組排列，rank 決定上下順序
 const SECTIONS: Record<SectionName, CompletionSection> = {
@@ -41,26 +45,44 @@ const SECTIONS: Record<SectionName, CompletionSection> = {
   提示框: { name: '提示框', rank: 3 },
   連結與媒體: { name: '連結與媒體', rank: 4 },
   行內格式: { name: '行內格式', rank: 5 },
-  日期時間: { name: '日期時間', rank: 6 },
+  文字顏色: { name: '文字顏色', rank: 6 },
+  背景顏色: { name: '背景顏色', rank: 7 },
+  日期時間: { name: '日期時間', rank: 8 },
 }
 
 const TABLE_HEAD = '| 欄位 1 | 欄位 2 |\n| --- | --- |\n| '
 
+function colorCommand(kind: ColorKind, choice: ColorChoice): SlashCommand {
+  const { open, close } = colorTags(kind, choice.value)
+  const isText = kind === 'text'
+  return {
+    label: isText ? `${choice.label}文字` : choice.label,
+    look: `${kind}-${choice.id}`,
+    section: isText ? '文字顏色' : '背景顏色',
+    keywords: isText ? ['color', 'colour', choice.id, '顏色', '上色'] : ['background', 'highlight', 'bg', choice.id, '背景', '螢光'],
+    hint: '',
+    text: open + close,
+    cursor: open.length,
+    placement: 'inline',
+  }
+}
+
 function callout(label: string, type: string, keywords: string[]): SlashCommand {
   const text = `> [!${type}] `
-  return { label, section: '提示框', keywords: ['callout', type, ...keywords], hint: `[!${type}]`, text, placement: 'line' }
+  return { label, look: type, section: '提示框', keywords: ['callout', type, ...keywords], hint: `[!${type}]`, text, placement: 'line' }
 }
 
 export function slashCommands(now = new Date()): SlashCommand[] {
   const date = formatDate(now)
   const time = formatTime(now)
   return [
-    { label: '標題 1', section: '基本', keywords: ['h1', 'heading', 'title'], hint: '#', text: '# ', placement: 'line' },
-    { label: '標題 2', section: '基本', keywords: ['h2', 'heading'], hint: '##', text: '## ', placement: 'line' },
-    { label: '標題 3', section: '基本', keywords: ['h3', 'heading'], hint: '###', text: '### ', placement: 'line' },
-    { label: '子頁面', section: '基本', keywords: ['page', 'subpage', 'new', '頁面'], hint: '新增並開啟', text: '', placement: 'inline', action: 'subpage' },
+    { label: '標題 1', look: 'h1', section: '基本', keywords: ['h1', 'heading', 'title'], hint: '#', text: '# ', placement: 'line' },
+    { label: '標題 2', look: 'h2', section: '基本', keywords: ['h2', 'heading'], hint: '##', text: '## ', placement: 'line' },
+    { label: '標題 3', look: 'h3', section: '基本', keywords: ['h3', 'heading'], hint: '###', text: '### ', placement: 'line' },
+    { label: '子頁面', look: 'page', section: '基本', keywords: ['page', 'subpage', 'new', '頁面'], hint: '新增並開啟', text: '', placement: 'inline', action: 'subpage' },
     {
       label: '連結到頁面 [[ ]]',
+      look: 'wikilink',
       section: '基本',
       keywords: ['link', 'page', 'wiki', 'mention', '[[', '引用', '提及'],
       hint: '[[ ]]',
@@ -70,14 +92,15 @@ export function slashCommands(now = new Date()): SlashCommand[] {
       thenComplete: true,
     },
 
-    { label: '項目清單', section: '清單', keywords: ['bullet', 'list', 'ul'], hint: '-', text: '- ', placement: 'line' },
-    { label: '編號清單', section: '清單', keywords: ['number', 'list', 'ol'], hint: '1.', text: '1. ', placement: 'line' },
-    { label: '待辦', section: '清單', keywords: ['todo', 'task', 'checkbox', '待辦事項'], hint: '- [ ]', text: '- [ ] ', placement: 'line' },
+    { label: '項目清單', look: 'bullet', section: '清單', keywords: ['bullet', 'list', 'ul'], hint: '-', text: '- ', placement: 'line' },
+    { label: '編號清單', look: 'number', section: '清單', keywords: ['number', 'list', 'ol'], hint: '1.', text: '1. ', placement: 'line' },
+    { label: '待辦', look: 'todo', section: '清單', keywords: ['todo', 'task', 'checkbox', '待辦事項'], hint: '- [ ]', text: '- [ ] ', placement: 'line' },
 
-    { label: '分隔線', section: '區塊', keywords: ['divider', 'hr', 'line', 'separator', '---'], hint: '---', text: '---\n', placement: 'block' },
-    { label: '引用', section: '區塊', keywords: ['quote', 'blockquote'], hint: '>', text: '> ', placement: 'line' },
+    { label: '分隔線', look: 'divider', section: '區塊', keywords: ['divider', 'hr', 'line', 'separator', '---'], hint: '---', text: '---\n', placement: 'block' },
+    { label: '引用', look: 'quote', section: '區塊', keywords: ['quote', 'blockquote'], hint: '>', text: '> ', placement: 'line' },
     {
       label: '摺疊區塊',
+      look: 'fold',
       section: '區塊',
       keywords: ['toggle', 'fold', 'collapse', 'details', '收合'],
       hint: '點標題展開',
@@ -85,9 +108,10 @@ export function slashCommands(now = new Date()): SlashCommand[] {
       cursor: '> [!note]- 標題'.length,
       placement: 'line',
     },
-    { label: '程式碼區塊', section: '區塊', keywords: ['code', 'pre', '```'], hint: '```', text: '```\n\n```', cursor: 4, placement: 'line' },
+    { label: '程式碼區塊', look: 'code', section: '區塊', keywords: ['code', 'pre', '```'], hint: '```', text: '```\n\n```', cursor: 4, placement: 'line' },
     {
       label: '表格',
+      look: 'table',
       section: '區塊',
       keywords: ['table', 'grid'],
       hint: '| |',
@@ -103,19 +127,32 @@ export function slashCommands(now = new Date()): SlashCommand[] {
     callout('提示框・危險', 'danger', ['danger', 'error', '錯誤']),
     callout('提示框・問題', 'question', ['question', 'faq', 'help']),
 
-    { label: '網址書籤', section: '連結與媒體', keywords: ['bookmark', 'url', 'web', '網址', '收藏'], hint: '抓標題與縮圖', text: '', placement: 'inline', action: 'bookmark' },
-    { label: '連結', section: '連結與媒體', keywords: ['link', 'url', 'href'], hint: '[文字](網址)', text: '[](https://)', cursor: 1, placement: 'inline' },
-    { label: '圖片', section: '連結與媒體', keywords: ['image', 'img', 'picture', 'photo', '照片'], hint: '![](網址)', text: '![](https://)', cursor: 4, placement: 'inline' },
+    { label: '網址書籤', look: 'bookmark', section: '連結與媒體', keywords: ['bookmark', 'url', 'web', '網址', '收藏'], hint: '抓標題與縮圖', text: '', placement: 'inline', action: 'bookmark' },
+    { label: '連結', look: 'link', section: '連結與媒體', keywords: ['link', 'url', 'href'], hint: '[文字](網址)', text: '[](https://)', cursor: 1, placement: 'inline' },
+    { label: '圖片', look: 'image', section: '連結與媒體', keywords: ['image', 'img', 'picture', 'photo', '照片'], hint: '![](網址)', text: '![](https://)', cursor: 4, placement: 'inline' },
 
-    { label: '粗體', section: '行內格式', keywords: ['bold', 'strong', 'b'], hint: '**', text: '****', cursor: 2, placement: 'inline' },
-    { label: '斜體', section: '行內格式', keywords: ['italic', 'em', 'i'], hint: '*', text: '**', cursor: 1, placement: 'inline' },
-    { label: '刪除線', section: '行內格式', keywords: ['strike', 'strikethrough', 'del'], hint: '~~', text: '~~~~', cursor: 2, placement: 'inline' },
-    { label: '行內程式碼', section: '行內格式', keywords: ['code', 'inline'], hint: '`', text: '``', cursor: 1, placement: 'inline' },
-    { label: '標籤', section: '行內格式', keywords: ['tag', 'hashtag', '#'], hint: '#', text: '#', placement: 'inline' },
+    { label: '粗體', look: 'bold', section: '行內格式', keywords: ['bold', 'strong', 'b'], hint: '**', text: '****', cursor: 2, placement: 'inline' },
+    { label: '斜體', look: 'italic', section: '行內格式', keywords: ['italic', 'em', 'i'], hint: '*', text: '**', cursor: 1, placement: 'inline' },
+    { label: '刪除線', look: 'strike', section: '行內格式', keywords: ['strike', 'strikethrough', 'del'], hint: '~~', text: '~~~~', cursor: 2, placement: 'inline' },
+    { label: '行內程式碼', look: 'inlinecode', section: '行內格式', keywords: ['code', 'inline'], hint: '`', text: '``', cursor: 1, placement: 'inline' },
+    { label: '標籤', look: 'tag', section: '行內格式', keywords: ['tag', 'hashtag', '#'], hint: '#', text: '#', placement: 'inline' },
 
-    { label: '今天日期', section: '日期時間', keywords: ['date', 'today', '日期'], hint: date, text: date, placement: 'inline' },
-    { label: '現在時間', section: '日期時間', keywords: ['time', 'now', '時間'], hint: time, text: time, placement: 'inline' },
-    { label: '日期與時間', section: '日期時間', keywords: ['datetime', 'timestamp'], hint: `${date} ${time}`, text: `${date} ${time}`, placement: 'inline' },
+    {
+      label: '螢光標記',
+      look: 'highlight',
+      section: '背景顏色',
+      keywords: ['highlight', 'mark', '==', '螢光', '畫重點'],
+      hint: '==',
+      text: '====',
+      cursor: 2,
+      placement: 'inline',
+    },
+    ...TEXT_COLORS.map((c) => colorCommand('text', c)),
+    ...BG_COLORS.map((c) => colorCommand('bg', c)),
+
+    { label: '今天日期', look: 'date', section: '日期時間', keywords: ['date', 'today', '日期'], hint: date, text: date, placement: 'inline' },
+    { label: '現在時間', look: 'time', section: '日期時間', keywords: ['time', 'now', '時間'], hint: time, text: time, placement: 'inline' },
+    { label: '日期與時間', look: 'datetime', section: '日期時間', keywords: ['datetime', 'timestamp'], hint: `${date} ${time}`, text: `${date} ${time}`, placement: 'inline' },
   ]
 }
 
@@ -228,7 +265,8 @@ export function slashSource(context: CompletionContext): CompletionResult | null
   return {
     from: match.from,
     filter: false,
-    options: commands.map((cmd, i) => ({
+    options: commands.map((cmd, i): SlashCompletion => ({
+      look: cmd.look,
       label: cmd.label,
       detail: cmd.hint,
       section: SECTIONS[cmd.section],

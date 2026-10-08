@@ -57,3 +57,25 @@ describe('摺疊提示框', () => {
     expect(renderMarkdown('> [!tip] 標題', ctx)).not.toContain('data-fold')
   })
 })
+
+describe('上色', () => {
+  it('文字顏色與背景顏色，中間的格式照常解析', () => {
+    const html = renderMarkdown('<span style="color:#e5484d">紅**粗**</span> <mark style="background:rgba(255, 200, 0, 0.35)">黃底</mark>', ctx)
+    expect(html).toContain('<span style="color:#e5484d">紅<strong>粗</strong></span>')
+    expect(html).toContain('<mark style="background:rgba(255, 200, 0, 0.35)">黃底</mark>')
+  })
+
+  it('==螢光==', () => {
+    expect(renderMarkdown('畫 ==重點== 了', ctx)).toContain('<mark style="background:rgba(255, 200, 0, 0.35)">重點</mark>')
+    expect(renderMarkdown('a == b == c', ctx)).not.toContain('<mark')
+  })
+
+  it('其他 style 或標籤一律當純文字', () => {
+    const html = renderMarkdown('<span style="color:red;background:url(x)">x</span> <span onclick="a()">y</span>', ctx)
+    expect(html).not.toContain('<span')
+  })
+
+  it('沒有結束標籤就當純文字', () => {
+    expect(renderMarkdown('<span style="color:#e5484d">沒關', ctx)).not.toContain('<span')
+  })
+})

@@ -1,10 +1,11 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { normalizeTitle } from './links'
+import { HIGHLIGHT, matchColorOpen } from './colors'
 
 /**
  * 預覽模式的 Markdown → HTML。內容可能來自匯入的 zip，一律經過 DOMPurify 才放進畫面。
- * 額外支援：[[連結]]、#標籤、待辦清單 - [ ]、Obsidian 的提示框 > [!note]。
+ * 額外支援：[[連結]]、#標籤、待辦清單 - [ ]、Obsidian 的提示框 > [!note]、文字上色與 ==螢光==。
  */
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
@@ -33,6 +34,57 @@ md.inline.ruler.after('wikilink', 'hashtag', (state, silent) => {
     token.meta = { tag: m[1] }
   }
   state.pos += m[0].length
+  return true
+})
+
+/**
+ * 上色：只認 colors.ts 定義的 <span style="color:…"> 與 <mark style="background:…">，
+ * 以及 ==螢光==。其他 HTML 照樣當純文字顯示（html: false）。
+ * 中間的文字照常解析，所以上色的字裡面還是可以有粗體、連結。
+ */
+type InlineState = Parameters<Parameters<typeof md.inline.ruler.push>[1]>[0]
+
+function wrapInline(state: InlineState, innerStart: number, innerEnd: number, after: number, open: string, close: string) {
+  const oldMax = state.posMax
+  state.push('html_inline', '', 0).content = open
+  state.pos = innerStart
+  state.posMax = innerEnd
+  state.md.inline.tokenize(state)
+  state.posMax = oldMax
+  state.pos = after
+  state.push('html_inline', '', 0).content = close
+}
+
+md.inline.ruler.before('emphasis', 'color', (state, silent) => {
+  if (state.src[state.pos] !== '<') return false
+  const open = matchColorOpen(state.src.slice(state.pos, state.posMax))
+  if (!open) return false
+  const closeTag = `</${open.tag}>`
+  const innerStart = state.pos + open.length
+  const innerEnd = state.src.indexOf(closeTag, innerStart)
+  if (innerEnd < 0 || innerEnd + closeTag.length > state.posMax) return false
+  const after = innerEnd + closeTag.length
+  if (silent) {
+    state.pos = after
+    return true
+  }
+  const style = open.tag === 'span' ? `color:${open.color}` : `background:${open.color}`
+  wrapInline(state, innerStart, innerEnd, after, `<${open.tag} style="${style}">`, closeTag)
+  return true
+})
+
+md.inline.ruler.before('emphasis', 'highlight', (state, silent) => {
+  if (!state.src.startsWith('==', state.pos)) return false
+  const innerStart = state.pos + 2
+  const innerEnd = state.src.indexOf('==', innerStart)
+  if (innerEnd <= innerStart || innerEnd + 2 > state.posMax) return false
+  // 跟 Obsidian 一樣：== 後面緊接空白不算
+  if (/\s/.test(state.src[innerStart]) || /\s/.test(state.src[innerEnd - 1])) return false
+  if (silent) {
+    state.pos = innerEnd + 2
+    return true
+  }
+  wrapInline(state, innerStart, innerEnd, innerEnd + 2, `<mark style="background:${HIGHLIGHT}">`, '</mark>')
   return true
 })
 

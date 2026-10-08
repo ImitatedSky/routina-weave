@@ -1,5 +1,5 @@
 import { EditorSelection, EditorState, type StateCommand } from '@codemirror/state'
-import { nextMarker, splitPrefix, taskToggle, toggleBlock, toggleWrap } from './format'
+import { clearColor, nextMarker, splitPrefix, taskToggle, toggleBlock, toggleWrap, wrapColor } from './format'
 
 /** 跑一次指令，回傳新的內容和選取範圍 */
 function run(command: StateCommand, doc: string, anchor: number, head = anchor) {
@@ -63,5 +63,40 @@ describe('行首記號', () => {
     expect(taskToggle('  * [x] 買菜')).toEqual({ offset: 5, insert: ' ' })
     expect(taskToggle('1. [X] 買菜')).toEqual({ offset: 4, insert: ' ' })
     expect(taskToggle('- 買菜')).toBeNull()
+  })
+})
+
+describe('wrapColor / clearColor', () => {
+  const red = { open: '<span style="color:#e5484d">', close: '</span>' }
+  const blue = { open: '<span style="color:#3e7bfa">', close: '</span>' }
+
+  function run(doc: string, from: number, to: number, cmd: StateCommand) {
+    let state = EditorState.create({ doc, selection: EditorSelection.range(from, to) })
+    cmd({ state, dispatch: (tr) => (state = tr.state) })
+    return { doc: state.doc.toString(), sel: state.selection.main }
+  }
+
+  it('選取的字包上顏色，選取範圍留在字上', () => {
+    const r = run('一段文字', 1, 3, wrapColor(red.open, red.close))
+    expect(r.doc).toBe('一<span style="color:#e5484d">段文</span>字')
+    expect(r.doc.slice(r.sel.from, r.sel.to)).toBe('段文')
+  })
+
+  it('沒選字就插入一對空標籤，游標在中間', () => {
+    const r = run('ab', 1, 1, wrapColor(red.open, red.close))
+    expect(r.doc).toBe('a<span style="color:#e5484d"></span>b')
+    expect(r.sel.from).toBe(1 + red.open.length)
+  })
+
+  it('已經有顏色就換掉，不會一層包一層', () => {
+    const doc = '<span style="color:#e5484d">紅字</span>'
+    const r = run(doc, red.open.length, red.open.length + 2, wrapColor(blue.open, blue.close))
+    expect(r.doc).toBe('<span style="color:#3e7bfa">紅字</span>')
+  })
+
+  it('清除顏色，字留著', () => {
+    const doc = '前<span style="color:#e5484d">紅字</span>後'
+    const r = run(doc, 1 + red.open.length + 1, 1 + red.open.length + 1, clearColor)
+    expect(r.doc).toBe('前紅字後')
   })
 })
