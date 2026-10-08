@@ -98,9 +98,17 @@ function useThemeClass() {
     const apply = () => {
       const dark = theme === 'dark' || (theme === 'system' && media.matches)
       document.documentElement.classList.toggle('dark', dark)
+      // Android 殼：狀態列與導覽列跟著換色（手動選了跟系統相反的深淺色時才看得出差別）
+      window.RoutinaWeaveSystemBars?.setDark(dark)
     }
     apply()
     media.addEventListener('change', apply)
     return () => media.removeEventListener('change', apply)
   }, [theme])
+}
+
+declare global {
+  interface Window {
+    RoutinaWeaveSystemBars?: { setDark(dark: boolean): void }
+  }
 }

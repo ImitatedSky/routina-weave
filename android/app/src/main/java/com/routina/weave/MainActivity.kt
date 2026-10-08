@@ -146,6 +146,7 @@ class MainActivity : ComponentActivity() {
         webView.addJavascriptInterface(fileSaver.bridge, FileSaver.BRIDGE_NAME)
         linkPreviewer = LinkPreviewer(webView)
         webView.addJavascriptInterface(linkPreviewer.bridge, LinkPreviewer.BRIDGE_NAME)
+        webView.addJavascriptInterface(SystemBars(this).bridge, SystemBars.BRIDGE_NAME)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
