@@ -24,13 +24,30 @@ interface Props {
 
 const OPEN_LABEL: Record<GraphNode['kind'], string> = { note: '開啟', tag: '查看', missing: '建立' }
 
+/**
+ * 排版停下來、使用者也沒在碰的時候，整個繪圖迴圈暫停，圖譜開著也不耗 CPU。
+ * 要重畫（換色、高亮、資料變動、對焦）或使用者碰到圖時先叫醒。
+ */
+interface Sleeper {
+  wake: () => void
+  reheat: () => void
+}
+
+const sleepers = new WeakMap<Graph, Sleeper>()
+
+function wake(graph: Graph) {
+  sleepers.get(graph)?.wake()
+}
+
 /** zoomToFit 只看節點中心，留邊給標題和右上角的按鈕；小圖譜比較矮，按比例少留一點 */
 function fit(graph: Graph, ms: number) {
+  wake(graph)
   graph.zoomToFit(ms, Math.min(56, Math.min(graph.width(), graph.height()) * 0.16))
 }
 
 /** 重設任一個樣式屬性 force-graph 就會在下一格重畫；高亮、換色時用 */
 function redraw(graph: Graph) {
+  wake(graph)
   graph.linkColor(graph.linkColor())
 }
 
@@ -71,6 +88,17 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
     // 0：還沒對焦，1：第一格先對焦一次，2：排版穩定後再對焦，之後交給使用者
     let fitStage = 0
 
+    // settled：排版停下來了（拖曳節點會讓它重新跑，跑的時候每一步都會把它設回 false）
+    let settled = false
+    let sleepTimer: number | undefined
+    const sleepSoon = () => {
+      window.clearTimeout(sleepTimer)
+      // 對焦動畫最長 400ms，等它跑完再停
+      sleepTimer = window.setTimeout(() => {
+        if (settled) graph.pauseAnimation()
+      }, 1500)
+    }
+
     const graph: Graph = new ForceGraph<NodeObject, LinkObject>(hostRef.current!)
       .width(wrap.clientWidth)
       .height(wrap.clientHeight)
@@ -82,7 +110,8 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
       .linkLineDash(linkDash)
       .minZoom(0.2)
       .maxZoom(6)
-      .warmupTicks(80)
+      // 不先在背後算好位置再畫（5000 則時要等 10 秒），打開就畫，節點邊動邊排好
+      .warmupTicks(0)
       .cooldownTime(3000)
       .onNodeHover((node) => {
         // 觸控時 force-graph 會把最後碰到的位置當成 hover，平移後會亂亮，所以只理滑鼠
@@ -97,11 +126,14 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
       })
       .onBackgroundClick(() => setSelectedId(null))
       .onEngineTick(() => {
+        settled = false
         if (fitStage > 0 || !graph.graphData().nodes.length) return
         fitStage = 1
         fit(graph, 0)
       })
       .onEngineStop(() => {
+        settled = true
+        sleepSoon()
         if (fitStage !== 1) return
         fitStage = 2
         if (!touchedRef.current) fit(graph, 400)
@@ -109,6 +141,21 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
     graph.d3Force('charge')?.strength(-120)
     graph.d3Force('link')?.distance(45)
     graphRef.current = graph
+
+    sleepers.set(graph, {
+      wake: () => {
+        graph.resumeAnimation()
+        sleepSoon()
+      },
+      reheat: () => {
+        settled = false
+        graph.resumeAnimation()
+      },
+    })
+    const host = hostRef.current!
+    const onTouch = () => wake(graph)
+    const events = ['pointerdown', 'pointermove', 'wheel', 'touchstart'] as const
+    for (const name of events) host.addEventListener(name, onTouch, { passive: true })
 
     const resize = new ResizeObserver(() => {
       if (wrap.clientWidth && wrap.clientHeight) graph.width(wrap.clientWidth).height(wrap.clientHeight)
@@ -123,6 +170,8 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 
     return () => {
+      window.clearTimeout(sleepTimer)
+      for (const name of events) host.removeEventListener(name, onTouch)
       resize.disconnect()
       theme.disconnect()
       graph._destructor()
@@ -144,6 +193,8 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
     const old = new Map(graph.graphData().nodes.map((n) => [n.id, n]))
     const nodes = data.nodes.map((n) => Object.assign(old.get(n.id) ?? {}, n))
     const links = data.links.map((l) => ({ ...l }))
+    // 資料變了排版會重新跑，要等它再停下來才能睡
+    sleepers.get(graph)?.reheat()
     graph.graphData({ nodes, links })
     setActive(graph, view, neighborsRef.current, hoverRef.current ?? selectedRef.current)
   }, [data])

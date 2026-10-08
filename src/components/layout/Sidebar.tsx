@@ -114,7 +114,7 @@ function PageTree({ parent, ...props }: TreeProps & { parent: string | null }) {
 }
 
 function TreeNode({ note, notes, depth, route, onOpen }: TreeProps & { note: Note }) {
-  const hasChildren = Object.values(notes).some((c) => c.parent === note.id && !c.template)
+  const hasChildren = childrenOf(notes, note.id).some((c) => !c.template)
   const containsCurrent = route.kind === 'page' && isAncestor(notes, note.id, route.id)
   const [open, setOpen] = useState(containsCurrent)
   // 從連結或搜尋跳到深層頁面時，把它的上層展開，側邊欄才看得到目前位置

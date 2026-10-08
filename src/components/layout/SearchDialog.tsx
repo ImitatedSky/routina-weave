@@ -59,7 +59,8 @@ export function SearchDialog() {
     return () => window.removeEventListener('keydown', onKey)
   }, [setOpen])
 
-  const hits = useMemo(() => search(Object.values(notes), query), [notes, query])
+  // 關著的時候不用算；不然每次存檔都要對全部筆記跑一次
+  const hits = useMemo(() => (open ? search(Object.values(notes), query) : []), [open, notes, query])
   const canCreate = query.trim() && !hits.some((h) => h.note.title.toLowerCase() === query.trim().toLowerCase())
   const total = hits.length + (canCreate ? 1 : 0)
 

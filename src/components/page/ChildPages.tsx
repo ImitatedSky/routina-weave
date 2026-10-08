@@ -28,7 +28,8 @@ export function ChildPages({ note }: { note: Note }) {
   const updateNote = useNotes((s) => s.updateNote)
   const [choosingDefault, setChoosingDefault] = useState(false)
 
-  const children = useMemo(() => childrenOf(notes, note.id), [notes, note.id])
+  // childrenOf 回傳共用陣列，複製一份再交給會排序、篩選的地方
+  const children = useMemo(() => [...childrenOf(notes, note.id)], [notes, note.id])
   const fields = useMemo(() => collectFields(children), [children])
   const templates = useMemo(
     () => Object.values(notes).filter((n) => n.template).sort((a, b) => a.title.localeCompare(b.title, 'zh-Hant')),

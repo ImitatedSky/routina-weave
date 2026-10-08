@@ -122,7 +122,16 @@ export function inlineTags(body: string): string[] {
   return [...tags]
 }
 
+// 筆記物件不會被就地修改（updateNote 一律換新物件），所以可以用物件本身當快取的鍵：
+// 沒改過的筆記不用每次存檔都重跑正規式
+const tagCache = new WeakMap<Note, string[]>()
+
 /** frontmatter 的 tags 加上內文的 #標籤 */
 export function allTags(note: Note): string[] {
-  return [...new Set([...note.tags, ...inlineTags(note.body)])]
+  let tags = tagCache.get(note)
+  if (!tags) {
+    tags = [...new Set([...note.tags, ...inlineTags(note.body)])]
+    tagCache.set(note, tags)
+  }
+  return tags
 }

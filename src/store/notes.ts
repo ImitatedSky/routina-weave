@@ -145,29 +145,49 @@ export function releaseAttachments(notes: Record<string, Note>, ids: string[]) {
 
 function nextOrder(notes: Record<string, Note>, parent: string | null): number {
   let max = -1
-  for (const n of Object.values(notes)) {
-    if (n.parent === parent && n.order > max) max = n.order
-  }
+  for (const n of childrenOf(notes, parent)) if (n.order > max) max = n.order
   return max + 1
 }
 
-/** 某一頁底下的子頁面，依 order 排好 */
-export function childrenOf(notes: Record<string, Note>, parent: string | null): Note[] {
-  return Object.values(notes)
-    .filter((n) => n.parent === parent)
-    .sort((a, b) => a.order - b.order || a.created.localeCompare(b.created))
+/**
+ * 「上層 → 子頁面」對照表。每次有筆記變動 notes 都是新物件，所以用它當快取的鍵：
+ * 同一個 notes 只建一次，側邊欄每個節點、子頁面清單都查這張表，不用各自掃全部筆記
+ * （5000 則時側邊欄原本每次存檔要花 0.7 秒）。
+ */
+const childIndexCache = new WeakMap<Record<string, Note>, Map<string | null, Note[]>>()
+const NO_CHILDREN: readonly Note[] = []
+
+function childIndex(notes: Record<string, Note>): Map<string | null, Note[]> {
+  let index = childIndexCache.get(notes)
+  if (!index) {
+    index = new Map()
+    for (const n of Object.values(notes)) {
+      const list = index.get(n.parent)
+      if (list) list.push(n)
+      else index.set(n.parent, [n])
+    }
+    for (const list of index.values()) list.sort((a, b) => a.order - b.order || a.created.localeCompare(b.created))
+    childIndexCache.set(notes, index)
+  }
+  return index
+}
+
+/** 某一頁底下的子頁面，依 order 排好。回傳的是共用的陣列，不要直接改它 */
+export function childrenOf(notes: Record<string, Note>, parent: string | null): readonly Note[] {
+  return childIndex(notes).get(parent) ?? NO_CHILDREN
 }
 
 export function descendants(notes: Record<string, Note>, id: string): string[] {
   const out: string[] = []
   const stack = [id]
+  const seen = new Set(stack)
   while (stack.length) {
-    const current = stack.pop()!
-    for (const n of Object.values(notes)) {
-      if (n.parent === current) {
-        out.push(n.id)
-        stack.push(n.id)
-      }
+    for (const n of childrenOf(notes, stack.pop()!)) {
+      // 壞資料（上層互相指）也不會無限迴圈
+      if (seen.has(n.id)) continue
+      seen.add(n.id)
+      out.push(n.id)
+      stack.push(n.id)
     }
   }
   return out

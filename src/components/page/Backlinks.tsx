@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useNotes } from '@/store/notes'
+import { useNotes, childrenOf } from '@/store/notes'
 import { navigate } from '@/store/route'
 import { NoteIcon } from '@/components/common/Thumbnail'
 import { LazyGraphCanvas as GraphCanvas } from '@/components/graph/LazyGraphCanvas'
 import { useOpenGraphNode } from '@/components/graph/useOpenGraphNode'
 import { buildLinkGraph } from '@/notes/links'
 import { buildGraphData, localGraph } from '@/notes/graphData'
-import { findLinkMention, findUnlinkedMention, snippetAt, linkMention, type Snippet } from '@/notes/mentions'
+import { findLinkMention, noteUnlinkedMention, snippetAt, linkMention, type Snippet } from '@/notes/mentions'
 import { cn } from '@/lib/utils'
 import type { Note } from '@/notes/types'
 
@@ -22,9 +22,10 @@ export function Backlinks({ note }: { note: Note }) {
   const notes = useNotes((s) => s.notes)
   const updateNote = useNotes((s) => s.updateNote)
 
-  const { linked, unlinked, local } = useMemo(() => {
+  const { linked, unlinked, hasGraph } = useMemo(() => {
     const list = Object.values(notes)
-    const incoming = buildLinkGraph(list).incoming.get(note.id) ?? new Set<string>()
+    const graph = buildLinkGraph(list)
+    const incoming = graph.incoming.get(note.id) ?? new Set<string>()
     const byUpdated = (a: Mentioned, b: Mentioned) => b.note.updated.localeCompare(a.note.updated)
 
     const linked: Mentioned[] = [...incoming]
@@ -39,23 +40,23 @@ export function Backlinks({ note }: { note: Note }) {
     const unlinked: Mentioned[] = []
     for (const n of list) {
       if (n.id === note.id || n.template || incoming.has(n.id)) continue
-      const mention = findUnlinkedMention(n.body, note.title)
+      const mention = noteUnlinkedMention(n, note.title)
       if (mention) unlinked.push({ note: n, snippet: snippetAt(n.body, mention) })
     }
     unlinked.sort(byUpdated)
 
-    const all = buildGraphData(list, { tags: false, missing: false, children: true })
-    return { linked, unlinked, local: localGraph(all, note.id, 2) }
-  }, [notes, note.id, note.title])
-
-  const hasGraph = local.nodes.length > 1
+    // 小圖譜要展開才算；這裡只判斷有沒有東西可以畫（有連出、連入、上層或子頁面）
+    const hasGraph =
+      incoming.size > 0 || (graph.outgoing.get(note.id)?.size ?? 0) > 0 || !!note.parent || childrenOf(notes, note.id).length > 0
+    return { linked, unlinked, hasGraph }
+  }, [notes, note.id, note.title, note.parent])
 
   if (!linked.length && !unlinked.length) {
     return (
       <section className="mt-10 border-t pt-4">
         <div className="flex flex-wrap items-center gap-x-2">
           <p className="flex-1 text-sm text-muted-foreground/70">還沒有其他筆記連到這裡</p>
-          {hasGraph && <LocalGraph data={local} centerId={note.id} compact />}
+          {hasGraph && <LocalGraph centerId={note.id} compact />}
         </div>
       </section>
     )
@@ -97,7 +98,7 @@ export function Backlinks({ note }: { note: Note }) {
         </>
       )}
 
-      {hasGraph && <LocalGraph data={local} centerId={note.id} />}
+      {hasGraph && <LocalGraph centerId={note.id} />}
     </section>
   )
 }
@@ -124,9 +125,8 @@ function MentionRow({ mentioned: { note, snippet } }: { mentioned: Mentioned }) 
 }
 
 /** 預設收合；compact 是沒有反向連結時跟提示擠在同一行的小按鈕 */
-function LocalGraph({ data, centerId, compact }: { data: ReturnType<typeof localGraph>; centerId: string; compact?: boolean }) {
+function LocalGraph({ centerId, compact }: { centerId: string; compact?: boolean }) {
   const [open, setOpen] = useState(false)
-  const openNode = useOpenGraphNode()
   const toggle = (
     <button
       onClick={() => setOpen(!open)}
@@ -141,6 +141,17 @@ function LocalGraph({ data, centerId, compact }: { data: ReturnType<typeof local
     </button>
   )
   if (!open) return toggle
+  return <OpenLocalGraph toggle={toggle} centerId={centerId} compact={compact} />
+}
+
+/** 展開後才掛上，收合時完全不算圖譜資料 */
+function OpenLocalGraph({ toggle, centerId, compact }: { toggle: React.ReactNode; centerId: string; compact?: boolean }) {
+  const notes = useNotes((s) => s.notes)
+  const openNode = useOpenGraphNode()
+  const data = useMemo(
+    () => localGraph(buildGraphData(Object.values(notes), { tags: false, missing: false, children: true }), centerId, 2),
+    [notes, centerId],
+  )
   return (
     <>
       {toggle}

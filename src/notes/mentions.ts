@@ -1,4 +1,5 @@
 import { WIKILINK, normalizeTitle } from './links'
+import type { Note } from './types'
 
 /**
  * 反向連結要顯示「在哪裡提到這頁」，以及把沒加 [[ ]] 的提及改成連結。
@@ -80,4 +81,18 @@ export function snippetAt(body: string, mention: Mention, maxBefore = 30, maxAft
   if (before.length > maxBefore) before = '…' + before.slice(-maxBefore)
   if (after.length > maxAfter) after = after.slice(0, maxAfter) + '…'
   return { before, match: body.slice(mention.index, end), after }
+}
+
+// 同一則筆記（物件沒換）找同一個標題，結果一定一樣；反向連結區塊每次存檔都會對全部筆記找一次
+const unlinkedCache = new WeakMap<Note, Map<string, Mention | null>>()
+
+/** findUnlinkedMention 的快取版，給要對很多則筆記一起找的地方用 */
+export function noteUnlinkedMention(note: Note, title: string): Mention | null {
+  let byTitle = unlinkedCache.get(note)
+  if (!byTitle) {
+    byTitle = new Map()
+    unlinkedCache.set(note, byTitle)
+  }
+  if (!byTitle.has(title)) byTitle.set(title, findUnlinkedMention(note.body, title))
+  return byTitle.get(title)!
 }

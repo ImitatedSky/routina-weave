@@ -1,4 +1,4 @@
-import { useNotes, childrenOf, pathOf } from './notes'
+import { useNotes, childrenOf, pathOf, descendants } from './notes'
 
 beforeEach(() => {
   useNotes.setState({ loaded: true, notes: {} })
@@ -89,5 +89,41 @@ describe('封面與附件', () => {
     expect(await db.getAttachment('img1')).toBeDefined()
     useNotes.getState().deleteNote(b.id)
     await vi.waitFor(async () => expect(await db.getAttachment('img1')).toBeUndefined())
+  })
+})
+
+describe('子頁面對照表與快取', () => {
+  it('筆記變動後 childrenOf 跟著更新', () => {
+    const { createNote } = useNotes.getState()
+    const a = createNote({ title: 'A' })
+    expect(childrenOf(useNotes.getState().notes, a.id)).toEqual([])
+    const b = useNotes.getState().createNote({ title: 'B', parent: a.id })
+    expect(childrenOf(useNotes.getState().notes, a.id).map((n) => n.id)).toEqual([b.id])
+    useNotes.getState().moveNote(b.id, null)
+    expect(childrenOf(useNotes.getState().notes, a.id)).toEqual([])
+  })
+
+  it('上層互相指的壞資料不會讓 descendants 卡住', () => {
+    const now = new Date().toISOString()
+    const base = { body: '', order: 0, tags: [], props: {}, created: now, updated: now }
+    const notes = {
+      x: { ...base, id: 'x', title: 'X', parent: 'y' },
+      y: { ...base, id: 'y', title: 'Y', parent: 'x' },
+    }
+    // 有正常結束就好；自己不算自己的子頁面
+    expect(descendants(notes, 'x')).toEqual(['y'])
+  })
+
+  it('改了內文，標籤與連結重新解析', async () => {
+    const { allTags } = await import('@/notes/markdown')
+    const { buildLinkGraph } = await import('@/notes/links')
+    const { createNote } = useNotes.getState()
+    const target = createNote({ title: '目標' })
+    const a = useNotes.getState().createNote({ title: 'A', body: '#舊' })
+    expect(allTags(useNotes.getState().notes[a.id])).toEqual(['舊'])
+    useNotes.getState().updateNote(a.id, { body: '#新 [[目標]]' })
+    const notes = useNotes.getState().notes
+    expect(allTags(notes[a.id])).toEqual(['新'])
+    expect([...buildLinkGraph(Object.values(notes)).incoming.get(target.id)!]).toEqual([a.id])
   })
 })

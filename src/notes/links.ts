@@ -22,17 +22,36 @@ export function parseLinks(body: string): WikiLink[] {
   return links
 }
 
+// 跟 allTags 一樣用筆記物件當快取的鍵，只有改過的筆記才重新解析
+const linkCache = new WeakMap<Note, WikiLink[]>()
+
+/** 這則筆記的 [[連結]]（有快取） */
+export function noteLinks(note: Note): WikiLink[] {
+  let links = linkCache.get(note)
+  if (!links) {
+    links = parseLinks(note.body)
+    linkCache.set(note, links)
+  }
+  return links
+}
+
 export function normalizeTitle(title: string): string {
   return title.trim().toLowerCase()
 }
 
-/** 標題 → 筆記 id。範本不參與連結 */
+/** 標題 → 筆記 id。範本不參與連結；同名時取最早建立的（一趟掃完，不用整個排序） */
 export function titleIndex(notes: Iterable<Note>): Map<string, string> {
-  const sorted = [...notes].filter((n) => !n.template).sort((a, b) => a.created.localeCompare(b.created))
   const index = new Map<string, string>()
-  for (const note of sorted) {
+  const createdOf = new Map<string, string>()
+  for (const note of notes) {
+    if (note.template) continue
     const key = normalizeTitle(note.title)
-    if (key && !index.has(key)) index.set(key, note.id)
+    if (!key) continue
+    const seen = createdOf.get(key)
+    if (seen === undefined || note.created < seen) {
+      index.set(key, note.id)
+      createdOf.set(key, note.created)
+    }
   }
   return index
 }
@@ -53,7 +72,7 @@ export function buildLinkGraph(notes: Note[]): LinkGraph {
   const unresolved = new Map<string, Set<string>>()
   for (const note of notes) {
     if (note.template) continue
-    for (const link of parseLinks(note.body)) {
+    for (const link of noteLinks(note)) {
       const targetId = index.get(normalizeTitle(link.target))
       if (!targetId) {
         if (!unresolved.has(note.id)) unresolved.set(note.id, new Set())
