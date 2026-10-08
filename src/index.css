@@ -141,3 +141,24 @@
 .markdown .callout[data-fold="closed"] > .callout-title::before { transform: rotate(-90deg); }
 .markdown .callout[data-fold="closed"] > :not(.callout-title) { display: none; }
 .markdown .callout[data-fold="closed"] > .callout-title { margin-bottom: 0; }
+
+/* ---- 連結卡片（預覽與編輯器共用）：左邊文字、右邊縮圖，像 Notion 的書籤 ---- */
+.link-card {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--card-foreground);
+  text-decoration: none !important;
+  line-height: 1.45;
+}
+.link-card:hover { background: color-mix(in oklch, var(--muted) 60%, var(--card)); }
+.link-card-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; padding: 10px 12px; }
+.link-card-title { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 0.95em; font-weight: 600; }
+.link-card-desc { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 0.8em; color: var(--muted-foreground); }
+.link-card-host { margin-top: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78em; color: var(--muted-foreground); }
+.link-card-thumb { flex: none; width: 34%; max-width: 180px; min-height: 84px; background: var(--muted); }
+.link-card-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+.markdown .link-card + * { margin-top: 0.75em; }

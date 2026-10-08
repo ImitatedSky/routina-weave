@@ -12,6 +12,8 @@ export interface LinkPreview {
   site?: string
   /** 已縮小的縮圖 */
   image?: Blob
+  /** 原圖網址（只是記下來，畫面上用的是縮圖） */
+  imageUrl?: string
 }
 
 interface LinkBridge {
@@ -25,6 +27,7 @@ interface BridgeResult {
   description?: string
   site?: string
   image?: string
+  imageUrl?: string
   error?: string
 }
 
@@ -82,6 +85,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     description: clip(result.description, MAX_DESCRIPTION),
     site: clip(result.site, MAX_TITLE) ?? site,
     image: result.image ? base64ToBlob(result.image, 'image/jpeg') : undefined,
+    imageUrl: result.imageUrl && /^https?:\/\//i.test(result.imageUrl) ? result.imageUrl : undefined,
   }
 }
 

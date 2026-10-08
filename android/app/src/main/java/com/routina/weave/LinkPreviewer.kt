@@ -72,8 +72,11 @@ class LinkPreviewer(private val webView: WebView) {
         val image = meta["og:image"] ?: meta["og:image:url"] ?: meta["og:image:secure_url"]
             ?: meta["twitter:image"] ?: meta["twitter:image:src"]
         if (image != null) {
+            val imageUrl = runCatching { URL(page.url, image) }.getOrNull()
+            // 原圖網址寫進筆記，其他軟體（Obsidian 的 cardlink）才看得到圖
+            json.putOpt("imageUrl", imageUrl?.toString())
             // 縮圖抓不到不影響標題與說明
-            json.putOpt("image", runCatching { thumbnail(URL(page.url, image)) }.getOrNull())
+            json.putOpt("image", imageUrl?.let { runCatching { thumbnail(it) }.getOrNull() })
         }
         return json
     }

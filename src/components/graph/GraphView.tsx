@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNotes } from '@/store/notes'
 import { buildGraphData, type GraphOptions } from '@/notes/graphData'
 import { cn } from '@/lib/utils'
-import { GraphCanvas } from './GraphCanvas'
+import { LazyGraphCanvas as GraphCanvas } from './LazyGraphCanvas'
 import { useOpenGraphNode } from './useOpenGraphNode'
 
 const TOGGLES: { key: keyof GraphOptions; label: string }[] = [

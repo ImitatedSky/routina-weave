@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { renderMarkdown, toggleTask } from '@/notes/render'
 import { useNotes } from '@/store/notes'
 import { titleIndex, normalizeTitle } from '@/notes/links'
 import { useOpenLink } from './useOpenLink'
+import { fillAttachmentImages } from '@/lib/attachmentImages'
 
 export function Preview({ noteId, body }: { noteId: string; body: string }) {
   const notes = useNotes((s) => s.notes)
@@ -13,6 +14,9 @@ export function Preview({ noteId, body }: { noteId: string; body: string }) {
     () => renderMarkdown(body, { exists: (title) => index.has(normalizeTitle(title)) }),
     [body, index],
   )
+  const root = useRef<HTMLDivElement>(null)
+  // 連結卡片的縮圖存在本機附件裡，畫出來之後再補上
+  useEffect(() => (root.current ? fillAttachmentImages(root.current) : undefined), [html])
 
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement
@@ -44,5 +48,5 @@ export function Preview({ noteId, body }: { noteId: string; body: string }) {
   if (!body.trim()) {
     return <p className="text-muted-foreground">（空白頁面）</p>
   }
-  return <div className="markdown" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
+  return <div ref={root} className="markdown" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
 }

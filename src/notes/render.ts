@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { normalizeTitle } from './links'
 import { HIGHLIGHT, matchColorOpen } from './colors'
+import { CARD_LANG, cardHtml, parseCard } from './cardlink'
 
 /**
  * 預覽模式的 Markdown → HTML。內容可能來自匯入的 zip，一律經過 DOMPurify 才放進畫面。
@@ -88,6 +89,17 @@ md.inline.ruler.before('emphasis', 'highlight', (state, silent) => {
   return true
 })
 
+// ```cardlink 區塊畫成連結卡片；格式不對就照一般程式碼區塊顯示
+const defaultFence = md.renderer.rules.fence!
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  if (token.info.trim() === CARD_LANG) {
+    const card = parseCard(token.content)
+    if (card) return cardHtml(card, md.utils.escapeHtml)
+  }
+  return defaultFence(tokens, idx, options, env, self)
+}
+
 export interface RenderContext {
   /** 標題存在嗎？不存在的連結畫成虛線 */
   exists: (title: string) => boolean
@@ -149,7 +161,7 @@ md.core.ruler.after('inline', 'callouts', (state) => {
 export function renderMarkdown(body: string, ctx: RenderContext): string {
   context = ctx
   const html = md.render(body)
-  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-wikilink', 'data-title', 'data-task', 'data-type', 'data-fold'] })
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-wikilink', 'data-title', 'data-task', 'data-type', 'data-fold', 'data-attachment', 'target'] })
 }
 
 /** 把第 index 個待辦的勾選狀態寫回原文 */

@@ -4,6 +4,7 @@ import { renameLinks } from '@/notes/links'
 import { fromTemplate } from '@/notes/templates'
 import * as db from '@/storage/db'
 import { seedNotes } from '@/notes/seed'
+import { cardThumbnails } from '@/notes/cardlink'
 
 /**
  * 所有筆記都在記憶體裡（個人筆記量級，幾千則也只有幾 MB），
@@ -103,6 +104,7 @@ export const useNotes = create<NotesState>((set, get) => ({
     const images: string[] = []
     for (const n of ids) {
       if (next[n]?.image) images.push(next[n].image!)
+      if (next[n]) images.push(...cardThumbnails(next[n].body))
       delete next[n]
     }
     set({ notes: next })
