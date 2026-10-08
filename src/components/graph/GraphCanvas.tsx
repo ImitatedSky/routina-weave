@@ -39,6 +39,24 @@ function wake(graph: Graph) {
   sleepers.get(graph)?.wake()
 }
 
+/**
+ * 往中心拉的弱引力（Obsidian 的 center force）。沒有連線的孤立節點只會被推開、
+ * 沒有東西拉住，會漂得很遠，整張圖縮放到框得住它們時就小到看不清楚。
+ */
+function gravity(strength: number) {
+  let nodes: { x?: number; y?: number; vx?: number; vy?: number }[] = []
+  const force = (alpha: number) => {
+    for (const n of nodes) {
+      n.vx = (n.vx ?? 0) - (n.x ?? 0) * strength * alpha
+      n.vy = (n.vy ?? 0) - (n.y ?? 0) * strength * alpha
+    }
+  }
+  force.initialize = (list: typeof nodes) => {
+    nodes = list
+  }
+  return force
+}
+
 /** zoomToFit 只看節點中心，留邊給標題和右上角的按鈕；小圖譜比較矮，按比例少留一點 */
 function fit(graph: Graph, ms: number) {
   wake(graph)
@@ -138,7 +156,10 @@ export function GraphCanvas({ data, onOpen, centerId, query = '', className }: P
         fitStage = 2
         if (!touchedRef.current) fit(graph, 400)
       })
-    graph.d3Force('charge')?.strength(-120)
+    // 推開的力只在 220 以內有效：沒有連線的孤立節點才不會被一路推到很遠，
+    // 不然「縮放到看得到全部」為了框住它們，整張圖會縮到看不見圖示和標題
+    graph.d3Force('charge')?.strength(-120).distanceMax(220)
+    graph.d3Force('gravity', gravity(0.06))
     graph.d3Force('link')?.distance(45)
     graphRef.current = graph
 
