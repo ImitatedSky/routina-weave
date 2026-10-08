@@ -1,7 +1,7 @@
 import { EditorState, EditorSelection } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { linkTarget, linkText, pasteLink, pastedUrl } from './pasteLink'
+import { linkTarget, linkText, pasteLink, pastedUrl, shortTitle } from './pasteLink'
 import { cardWidgets } from './cardWidget'
 import { cardBlock } from '@/notes/cardlink'
 
@@ -33,6 +33,16 @@ describe('pastedUrl', () => {
   it('連結文字的方括號與網址的括號不會弄壞 Markdown', () => {
     expect(linkText('a [b] c')).toBe('a ［b］ c')
     expect(linkTarget('https://a.com/x_(y)')).toBe('https://a.com/x_%28y%29')
+  })
+})
+
+describe('shortTitle', () => {
+  it('短的照用，長的先取分隔符號前面，再不行就截斷', () => {
+    expect(shortTitle('短標題')).toBe('短標題')
+    const long = 'iThome | iThome Online 是臺灣第一個網路原生報，提供IT產業即時新聞、企業IT產品報導與測試、技術專題'
+    expect(shortTitle(long)).toBe('iThome')
+    const noSep = '一'.repeat(80)
+    expect(shortTitle(noSep)).toBe('一'.repeat(59) + '…')
   })
 })
 
@@ -68,12 +78,22 @@ describe('貼上網址', () => {
 })
 
 describe('編輯器裡的卡片', () => {
-  it('游標不在區塊裡就顯示成卡片，游標進去就是原文', () => {
+  it('游標不在區塊裡就顯示成卡片，編輯中游標進去才是原文', async () => {
     const block = cardBlock({ url: 'https://a.com', title: '標題' })
     const view = mount(`前\n${block}\n後`, 0)
     expect(view.contentDOM.querySelector('.link-card')?.textContent).toContain('標題')
+    view.focus()
+    // CodeMirror 的焦點變化是非同步回報的
+    await vi.waitFor(() => expect(view.hasFocus).toBe(true))
+    await new Promise((r) => setTimeout(r, 50))
     view.dispatch({ selection: { anchor: 4 } })
     expect(view.contentDOM.querySelector('.link-card')).toBeNull()
+    view.destroy()
+  })
+
+  it('卡片在第一行、剛打開頁面（沒有焦點、游標在開頭）也要顯示成卡片', () => {
+    const view = mount(cardBlock({ url: 'https://a.com', title: '標題' }), 0)
+    expect(view.contentDOM.querySelector('.link-card')).not.toBeNull()
     view.destroy()
   })
 })

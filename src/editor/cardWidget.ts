@@ -1,4 +1,4 @@
-import { StateField, type EditorState, type Range } from '@codemirror/state'
+import { StateEffect, StateField, type EditorState, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { CARD_LANG, cardHtml, parseCard, type LinkCard } from '@/notes/cardlink'
@@ -66,7 +66,7 @@ class CardWidget extends WidgetType {
 
 const cleanups = new WeakMap<HTMLElement, () => void>()
 
-function build(state: EditorState): DecorationSet {
+function build(state: EditorState, focused: boolean): DecorationSet {
   const decos: Range<Decoration>[] = []
   const { from: selFrom, to: selTo } = state.selection.main
   syntaxTree(state).iterate({
@@ -79,7 +79,9 @@ function build(state: EditorState): DecorationSet {
       if (!/\n```\s*$/.test(text)) return false
       const from = state.doc.lineAt(node.from).from
       const to = state.doc.lineAt(node.to).to
-      if (selTo >= from && selFrom <= to) return false
+      // 只有正在編輯（有焦點）而且游標在區塊裡才露出原文。
+      // 剛打開頁面時游標預設在開頭，卡片又剛好在第一行，不看焦點的話會一直顯示原文
+      if (focused && selTo >= from && selFrom <= to) return false
       const code = node.node.getChild('CodeText')
       const card = code ? parseCard(state.sliceDoc(code.from, code.to)) : null
       if (card) decos.push(Decoration.replace({ widget: new CardWidget(card, text), block: true }).range(from, to))
@@ -89,14 +91,28 @@ function build(state: EditorState): DecorationSet {
   return Decoration.set(decos, true)
 }
 
-export const cardWidgets = StateField.define<DecorationSet>({
-  create: build,
+const setFocused = StateEffect.define<boolean>()
+
+interface CardState {
+  focused: boolean
+  decorations: DecorationSet
+}
+
+const cardField = StateField.define<CardState>({
+  create: (state) => ({ focused: false, decorations: build(state, false) }),
   update(value, tr) {
-    if (tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)) return build(tr.state)
-    return value
+    let focused = value.focused
+    for (const effect of tr.effects) if (effect.is(setFocused)) focused = effect.value
+    const changed = focused !== value.focused || tr.docChanged || tr.selection || syntaxTree(tr.state) !== syntaxTree(tr.startState)
+    return changed ? { focused, decorations: build(tr.state, focused) } : value
   },
-  provide: (field) => EditorView.decorations.from(field),
+  provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
 })
+
+export const cardWidgets = [
+  cardField,
+  EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing)),
+]
 
 export const cardWidgetStyles = EditorView.theme({
   '.cm-link-card': { position: 'relative', padding: '4px 0' },

@@ -30,6 +30,18 @@ export function linkText(text: string): string {
   return text.replace(/\[/g, '［').replace(/\]/g, '］').replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * 句子裡的連結用短一點的標題：太長時先取「 | 」「 - 」前面那段（通常是文章或網站名稱），
+ * 還是太長就截斷。卡片則顯示完整標題。
+ */
+export function shortTitle(title: string, max = 60): string {
+  const text = title.replace(/\s+/g, ' ').trim()
+  if ([...text].length <= max) return text
+  const head = text.split(/ [|｜–—-] /)[0].trim()
+  if ([...head].length >= 4 && [...head].length <= max) return head
+  return [...text].slice(0, max - 1).join('') + '…'
+}
+
 /** 網址裡的括號會讓 [文字](網址) 提早結束 */
 export function linkTarget(url: string): string {
   return url.replace(/\(/g, '%28').replace(/\)/g, '%29')
@@ -81,7 +93,7 @@ export const pasteLink = EditorView.domEventHandlers({
         full = cardBlock(card)
       } else {
         if (!preview.title) return
-        full = `[${linkText(preview.title)}](${target})`
+        full = `[${linkText(shortTitle(preview.title))}](${target})`
       }
       replacePlaceholder(view, noteId, placeholder, full)
     })
