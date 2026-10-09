@@ -41,7 +41,7 @@ export function Sidebar() {
   return (
     <nav className="flex h-full flex-col gap-1 overflow-y-auto bg-sidebar p-2 text-sm" aria-label="側邊欄">
       <div className="flex items-center gap-2 px-2 py-2">
-        <span className="text-lg">🧶</span>
+        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="size-6 rounded-md" />
         <button className="font-semibold tracking-tight" onClick={() => go({ kind: 'home' })}>
           Weave
         </button>

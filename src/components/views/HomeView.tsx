@@ -16,7 +16,10 @@ export function HomeView() {
   )
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-8 pb-24 sm:px-8">
-      <h1 className="text-2xl font-bold tracking-tight">🧶 Weave</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="size-8 rounded-lg" />
+        Weave
+      </h1>
       <div className="mt-4 flex gap-2">
         <Button onClick={() => navigate({ kind: 'page', id: createNote({ parent: null }).id })}>
           <FilePlus />
