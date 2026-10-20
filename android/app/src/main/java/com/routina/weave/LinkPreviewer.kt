@@ -8,7 +8,6 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.text.Html
 import android.util.Base64
-import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -21,38 +20,41 @@ import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URL
 import java.nio.charset.Charset
+import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 /**
  * 替網頁抓網址預覽（標題、說明、網站名稱、縮圖）。網頁直接 fetch 別的網站會被 CORS 擋，
  * 原生端沒有這個限制。
  *
- * 網頁端呼叫 `RoutinaWeaveLinks.fetchPreview(id, url)`，結果非同步回呼
- * `window.__weavePreviewResult(id, json)`，json 是字串：
+ * 網頁端對 `RoutinaWeaveLinks` 送 `{"id":…,"url":…}`（bridge 的共用部分見 [WebBridge]），回覆：
  * 成功 `{"ok":true,"title":…,"description":…,"site":…,"image":<JPEG base64>}`（欄位可能缺），
  * 失敗 `{"ok":false,"error":<代碼或例外訊息>}`。對應的網頁程式在 src/lib/linkPreview.ts。
  *
- * WebView 只載入自己的 appassets 網頁，外部連結都交給瀏覽器，所以只有我們的網頁叫得到這裡；
+ * bridge 只注入 App 自己的 origin，所以只有我們的網頁叫得到這裡；
  * 即使如此，仍然只允許 http/https，並拒絕連到本機與私有網段，免得被拿來掃內網。
+ * http 網址也抓，所以 network_security_config 的預設允許明文。
  */
-class LinkPreviewer(private val webView: WebView) {
+class LinkPreviewer {
 
     private class Download(val url: URL, val contentType: String, val bytes: ByteArray)
 
     private class PreviewException(code: String) : IOException(code)
 
-    val bridge = Bridge()
+    // 抓網頁要好幾秒，listener 在主執行緒，要丟到背景。固定兩條，一次貼很多網址也不會開一堆執行緒
+    private val executor = Executors.newFixedThreadPool(2)
 
-    inner class Bridge {
-        @JavascriptInterface
-        fun fetchPreview(id: String, url: String) {
-            // 抓網頁要好幾秒，不能佔住 bridge 執行緒，其他 bridge 呼叫會排在後面
-            Thread {
+    fun register(webView: WebView) {
+        WebBridge.register(webView, BRIDGE_NAME) { data, proxy ->
+            val json = WebBridge.parse(data) ?: return@register
+            val reply = BridgeReply.of(proxy, json) ?: return@register
+            val url = json.optString("url")
+            executor.execute {
                 val result = runCatching { preview(url) }.getOrElse {
                     JSONObject().put("ok", false).put("error", it.message ?: it.javaClass.simpleName)
                 }
-                report(id, result)
-            }.start()
+                reply.send(result)
+            }
         }
     }
 
@@ -214,12 +216,6 @@ class LinkPreviewer(private val webView: WebView) {
         output.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, buffer)
         output.recycle()
         return Base64.encodeToString(buffer.toByteArray(), Base64.NO_WRAP)
-    }
-
-    private fun report(id: String, result: JSONObject) {
-        val js = "window.__weavePreviewResult && window.__weavePreviewResult(" +
-            "${JSONObject.quote(id)}, ${JSONObject.quote(result.toString())})"
-        webView.post { webView.evaluateJavascript(js, null) }
     }
 
     companion object {

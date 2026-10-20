@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # CI 的 GitHub Actions（action 都釘了 commit SHA，靠這裡追蹤版本更新與安全修補）
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # 新版發布後先等幾天再升，避開剛被入侵就推出的惡意版本；安全性更新不受影響
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+
+  # 網頁的 npm 依賴
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    # minor／patch 合成一個 PR，major 各自分開好審
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "deps"
+
+  # Android 殼的 Gradle 依賴（android/gradle/libs.versions.toml）
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
+import { toast } from 'sonner'
 import { useNotes } from '@/store/notes'
 import { useUi } from '@/store/ui'
 import { MarkdownEditor } from '@/editor/MarkdownEditor'
@@ -12,6 +13,8 @@ import { AddCoverButton, CoverPicker, PageCover } from './PageCover'
 import { useOpenLink } from './useOpenLink'
 import { Thumbnail } from '@/components/common/Thumbnail'
 import type { Note } from '@/notes/types'
+import { safeHttpUrl } from '@/notes/bookmarks'
+import { conflictCopy } from '@/sync/plan'
 import { cn } from '@/lib/utils'
 
 export function PageView({ note }: { note: Note }) {
@@ -21,23 +24,37 @@ export function PageView({ note }: { note: Note }) {
   const [pickingCover, setPickingCover] = useState(false)
 
   // 內文打字時不要每個字都寫 IndexedDB；換頁或離開時把最後一次送出去。
-  // pending 記住是哪一頁的內容：換頁時 cleanup 跑在新頁面 render 之後，不能用當下的 note.id
-  const pending = useRef<{ id: string; body: string } | null>(null)
+  // pending 記住是哪一頁的內容：換頁時 cleanup 跑在新頁面 render 之後，不能用當下的 note.id。
+  // base 是開始打字時 store 裡的內文，用來看存回去之前有沒有被雲端同步改掉
+  const pending = useRef<{ id: string; body: string; base: string } | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const flush = () => {
     window.clearTimeout(timer.current)
-    if (pending.current) {
-      updateNote(pending.current.id, { body: pending.current.body })
-      pending.current = null
+    if (!pending.current) return
+    const { id, body, base } = pending.current
+    pending.current = null
+    const current = useNotes.getState().notes[id]
+    // 打字途中別台裝置的版本同步進來了：那個版本另存成衝突副本，本機打的當正本
+    if (current && current.body !== base && current.body !== body) {
+      void useNotes.getState().importNotes([conflictCopy(current, current.parent, new Date())])
+      toast('另一台裝置同時改了這頁，那個版本存成了衝突副本')
     }
+    updateNote(id, { body })
   }
   useEffect(() => () => flush(), [note.id]) // eslint-disable-line react-hooks/exhaustive-deps
   // 切到預覽時要馬上看到剛打的字
   useEffect(() => flush(), [mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onBodyChange = (body: string) => {
-    pending.current = { id: note.id, body }
     window.clearTimeout(timer.current)
+    // 改回跟存好的一樣就沒有要存的。不能留著：雲端同步這時換進新版的話，
+    // 編輯器會直接換成新版，留著的舊內容 300ms 後會把它蓋回去
+    if (body === note.body) {
+      pending.current = null
+      return
+    }
+    const base = pending.current?.id === note.id ? pending.current.base : note.body
+    pending.current = { id: note.id, body, base }
     timer.current = window.setTimeout(flush, 300)
   }
 
@@ -87,8 +104,8 @@ export function PageView({ note }: { note: Note }) {
  */
 function TitleInput({ note }: { note: Note }) {
   const updateNote = useNotes((s) => s.updateNote)
-  // 只有正在編輯時才有草稿；沒在編輯就直接顯示 note.title，
-  // 背景抓回來的網址標題才不會被輸入框裡的舊值蓋掉
+  // 真的打了字才有草稿；沒打字就直接顯示 note.title，背景抓回來的網址標題或
+  // 雲端同步下載的新標題才不會被輸入框裡的舊值蓋掉（只是點進欄位也一樣）
   const [draft, setDraft] = useState<string | null>(null)
   const commit = () => {
     if (draft === null) return
@@ -107,7 +124,6 @@ function TitleInput({ note }: { note: Note }) {
     <textarea
       rows={1}
       value={draft ?? note.title}
-      onFocus={() => setDraft(note.title)}
       onChange={(e) => setDraft(e.target.value.replace(/\n/g, ' '))}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -126,7 +142,7 @@ function TitleInput({ note }: { note: Note }) {
 function LinkCard({ note }: { note: Note }) {
   return (
     <a
-      href={note.url}
+      href={safeHttpUrl(note.url)}
       target="_blank"
       rel="noopener noreferrer"
       className="mt-4 flex gap-3 rounded-xl border bg-card p-3 hover:bg-muted/50"

@@ -13,8 +13,17 @@ export type Route =
   | { kind: 'templates' }
   | { kind: 'settings' }
 
+function decode(part: string): string {
+  try {
+    return decodeURIComponent(part)
+  } catch {
+    // 壞掉的 %E0 之類，當成沒有這段，回首頁
+    return ''
+  }
+}
+
 export function parseRoute(hash: string): Route {
-  const [kind, arg] = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent)
+  const [kind, arg] = hash.replace(/^#\/?/, '').split('/').map(decode)
   switch (kind) {
     case 'page':
       return arg ? { kind: 'page', id: arg } : { kind: 'home' }

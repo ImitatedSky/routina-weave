@@ -1,8 +1,11 @@
+import { askBridge, type BridgePort } from './nativeBridge'
+
 /**
  * 抓網址的標題、說明與縮圖。
  *
  * 網頁直接 fetch 別的網站會被 CORS 擋，所以：
- * - Android 殼：走原生的 JS bridge（android/.../LinkPreviewer.kt）。
+ * - Android 殼：走原生的 bridge（android/.../LinkPreviewer.kt），送 `{"url":…}`。
+ *   WebView 太舊、沒有 bridge 時跟網頁版一樣。
  * - 網頁版：目前只回傳網域。之後改走自己的 Cloudflare Worker，不呼叫第三方預覽服務，
  *   使用者存的網址才不會外流。
  */
@@ -14,10 +17,6 @@ export interface LinkPreview {
   image?: Blob
   /** 原圖網址（只是記下來，畫面上用的是縮圖） */
   imageUrl?: string
-}
-
-interface LinkBridge {
-  fetchPreview(id: string, url: string): void
 }
 
 /** bridge 回傳的 JSON。image 是 JPEG 的 base64 */
@@ -33,8 +32,7 @@ interface BridgeResult {
 
 declare global {
   interface Window {
-    RoutinaWeaveLinks?: LinkBridge
-    __weavePreviewResult?: (id: string, json: string) => void
+    RoutinaWeaveLinks?: BridgePort
   }
 }
 
@@ -43,42 +41,13 @@ const TIMEOUT_MS = 20_000
 const MAX_TITLE = 200
 const MAX_DESCRIPTION = 500
 
-const pending = new Map<string, (result: BridgeResult | null) => void>()
-
-function onBridgeResult(id: string, json: string) {
-  const resolve = pending.get(id)
-  if (!resolve) return
-  pending.delete(id)
-  try {
-    resolve(JSON.parse(json) as BridgeResult)
-  } catch {
-    resolve(null)
-  }
-}
-
-function askBridge(bridge: LinkBridge, url: string): Promise<BridgeResult | null> {
-  window.__weavePreviewResult ??= onBridgeResult
-  const id = crypto.randomUUID()
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      pending.delete(id)
-      resolve(null)
-    }, TIMEOUT_MS)
-    pending.set(id, (result) => {
-      clearTimeout(timer)
-      resolve(result)
-    })
-    bridge.fetchPreview(id, url)
-  })
-}
-
 /** 抓不到也不會失敗，至少回傳網域 */
 export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   const site = siteOf(url)
   const bridge = window.RoutinaWeaveLinks
   if (!bridge) return { site }
 
-  const result = await askBridge(bridge, url)
+  const result = await askBridge<BridgeResult>(bridge, { url }, TIMEOUT_MS)
   if (!result?.ok) return { site }
   return {
     title: clip(result.title, MAX_TITLE),

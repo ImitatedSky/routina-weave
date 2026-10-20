@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { EditorState } from '@codemirror/state'
+import { Annotation, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap, placeholder, drawSelection } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownKeymap, markdownLanguage } from '@codemirror/lang-markdown'
@@ -19,12 +19,18 @@ import { toggleWrap } from './format'
 import { MobileToolbar } from './MobileToolbar'
 
 export interface MarkdownEditorProps {
-  /** 換頁時換 key 重建編輯器；同一頁內 value 只當初始值 */
+  /**
+   * 外層存好的內容。換頁時換 key 重建編輯器；同一頁內 value 被外部改掉（例如雲端同步下載了新版）
+   * 會換掉編輯器內容，但使用者還有沒存回去的字時保留編輯器裡的
+   */
   value: string
   onChange: (value: string) => void
   /** 點 [[連結]]（Ctrl/⌘+點或在即時預覽中點）時呼叫 */
   onOpenLink?: (title: string) => void
 }
+
+/** 標記從 value 換進來的內容，不是使用者打的，不要再 onChange 回去 */
+const External = Annotation.define<boolean>()
 
 /**
  * CodeMirror 6 的 Markdown 編輯器。原文一個字都不改寫，存回去的就是使用者打的內容；
@@ -90,7 +96,8 @@ export function MarkdownEditor({ value, onChange, onOpenLink }: MarkdownEditorPr
           // 會被當成「看不到」而把 / 選單藏起來
           coarse ? EditorView.scrollMargins.of(toolbarOverlap) : [],
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) onChangeRef.current(update.state.doc.toString())
+            const external = update.transactions.some((tr) => tr.annotation(External))
+            if (update.docChanged && !external) onChangeRef.current(update.state.doc.toString())
             if (update.focusChanged) setFocused(update.view.hasFocus)
           }),
         ],
@@ -101,9 +108,28 @@ export function MarkdownEditor({ value, onChange, onOpenLink }: MarkdownEditorPr
       viewRef.current = null
       view.destroy()
     }
-    // value 只當初始值，換頁由外層換 key
+    // 建立時的 value 當初始內容，之後的變化由下面的 effect 處理；換頁由外層換 key
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 上一次收到的 value，也就是外層已經存好的內容。編輯器內容跟它不一樣就是還有字沒存
+  const savedRef = useRef(value)
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || value === savedRef.current) return
+    const doc = view.state.doc.toString()
+    const dirty = doc !== savedRef.current
+    savedRef.current = value
+    // 有沒存的字就不換：外層存回剛打的字時也是走這裡；
+    // 外部改的話讓本機的字照常存回去，外層再決定要不要把外部的版本另存（PageView 會存成衝突副本）
+    if (dirty) return
+    const { anchor, head } = view.state.selection.main
+    view.dispatch({
+      changes: { from: 0, to: doc.length, insert: value },
+      selection: { anchor: Math.min(anchor, value.length), head: Math.min(head, value.length) },
+      annotations: [External.of(true), Transaction.addToHistory.of(false)],
+    })
+  }, [value])
 
   return (
     <>

@@ -6,10 +6,12 @@ minSdk = "26"
 
 activity = "1.13.0"
 webkit = "1.12.1"
+playServicesAuth = "22.0.0"
 
 [libraries]
 androidx-activity = { module = "androidx.activity:activity", version.ref = "activity" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
+play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

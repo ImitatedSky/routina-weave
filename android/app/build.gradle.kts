@@ -53,8 +53,8 @@ android {
         applicationId = "com.routina.weave"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     sourceSets["main"].assets.srcDir(webAssetsDir)
@@ -118,4 +118,6 @@ dependencies {
     // 只有一個 WebView，不需要 Compose
     implementation(libs.androidx.activity)
     implementation(libs.androidx.webkit)
+    // Google 雲端硬碟同步的授權（Authorization API），見 GoogleAuth.kt
+    implementation(libs.play.services.auth)
 }

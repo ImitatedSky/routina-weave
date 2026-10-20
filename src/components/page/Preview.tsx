@@ -37,9 +37,10 @@ export function Preview({ noteId, body }: { noteId: string; body: string }) {
       updateNote(noteId, { body: toggleTask(body, Number(target.dataset.task)) })
       return
     }
-    // 外部連結：網頁版開新分頁；Android 殼會攔下來交給瀏覽器
-    const anchor = target.closest<HTMLAnchorElement>('a[href^="http"]')
-    if (anchor) {
+    // 外部連結：網頁版開新分頁，不在原分頁導走；Android 殼會攔下來交給瀏覽器。
+    // render.ts 已經把 href 限制在 http(s)、mailto 與 #，這裡看原始的 href（anchor.protocol 會把 # 算成本頁的 https:）
+    const anchor = target.closest<HTMLAnchorElement>('a[href]')
+    if (anchor && /^https?:/i.test(anchor.getAttribute('href')!)) {
       e.preventDefault()
       window.open(anchor.href, '_blank', 'noopener')
     }

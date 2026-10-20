@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  網址預覽由原生端（LinkPreviewer.kt 的 HttpURLConnection）抓網頁，還有少數網站只有 http，
+  所以預設允許明文。這份設定以網域區分、不分元件，WebView 也照它走。
+  App 自己的頁面、Google 授權與雲端硬碟一律只走 https：
+  http://appassets.androidplatform.net 這種網址就算被導覽到，也會在網路層被擋掉。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">appassets.androidplatform.net</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+    </domain-config>
+</network-security-config>

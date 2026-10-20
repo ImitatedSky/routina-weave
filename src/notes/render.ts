@@ -1,7 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { normalizeTitle } from './links'
-import { HIGHLIGHT, matchColorOpen } from './colors'
+import { COLOR_VALUE, HIGHLIGHT, matchColorOpen } from './colors'
 import { CARD_LANG, cardHtml, parseCard } from './cardlink'
 import { attachmentIdFromSrc } from './images'
 
@@ -169,10 +169,40 @@ md.core.ruler.after('inline', 'callouts', (state) => {
   }
 })
 
+// 專屬的 DOMPurify 實例，下面的 hook 不會影響別的地方
+const purify = DOMPurify(window)
+
+/**
+ * 連結只留 http(s)、mailto 與 # 開頭的站內連結（[[連結]] 是 href="#"、標籤是 #/tag/…）。
+ * //evil.example、/other-app/ 這類會在原分頁導走的拿掉 href，變成純文字。
+ * 不用 ALLOWED_URI_REGEXP：它會拿來檢查所有屬性，連 target、rel、type="checkbox" 都會被刪掉
+ */
+// 要有 // 才算外部網址：https:/other-app/、https:evil 這種瀏覽器會解成同站路徑
+const SAFE_HREF = /^(?:https?:\/\/|mailto:|#)/i
+purify.addHook('afterSanitizeAttributes', (node) => {
+  const href = node.getAttribute('href')
+  if (href !== null && !SAFE_HREF.test(href)) node.removeAttribute('href')
+})
+
+// style 只留上色規則產生的 color: / background:，其他（position:fixed 疊假畫面之類）一律刪掉
+const SAFE_STYLE = new RegExp(String.raw`^(?:color|background):(?:${COLOR_VALUE})$`)
+purify.addHook('uponSanitizeAttribute', (_node, data) => {
+  if (data.attrName === 'style' && !SAFE_STYLE.test(data.attrValue)) data.keepAttr = false
+})
+
+/** 放進畫面前的最後一關（匯出給測試直接餵 HTML） */
+export function sanitizeHtml(html: string): string {
+  return purify.sanitize(html, {
+    ADD_ATTR: ['data-wikilink', 'data-title', 'data-task', 'data-type', 'data-fold', 'data-attachment', 'target'],
+    // markdown 本身產生不出這些；id/name 會蓋掉 window.google 之類的全域變數（DOM clobbering）
+    FORBID_TAGS: ['svg', 'math', 'form'],
+    FORBID_ATTR: ['id', 'name', 'srcset', 'xlink:href'],
+  })
+}
+
 export function renderMarkdown(body: string, ctx: RenderContext): string {
   context = ctx
-  const html = md.render(body)
-  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-wikilink', 'data-title', 'data-task', 'data-type', 'data-fold', 'data-attachment', 'target'] })
+  return sanitizeHtml(md.render(body))
 }
 
 /** 把第 index 個待辦的勾選狀態寫回原文 */

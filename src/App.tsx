@@ -14,7 +14,9 @@ import { BookmarksView } from '@/components/views/BookmarksView'
 import { SettingsView } from '@/components/views/SettingsView'
 import { TemplatesView } from '@/components/views/TemplatesView'
 import { GraphView } from '@/components/graph/GraphView'
+import { notifyBridge, type BridgePort } from '@/lib/nativeBridge'
 import { cn } from '@/lib/utils'
+import { startAutoSync } from '@/sync/service'
 
 export function App() {
   const loaded = useNotes((s) => s.loaded)
@@ -27,6 +29,11 @@ export function App() {
   useEffect(() => {
     void init()
   }, [init])
+
+  // 筆記載入後才開始同步，不然會把空的本機狀態拿去比對
+  useEffect(() => {
+    if (loaded) startAutoSync()
+  }, [loaded])
 
   // 換頁時捲回最上面
   useEffect(() => {
@@ -99,7 +106,8 @@ function useThemeClass() {
       const dark = theme === 'dark' || (theme === 'system' && media.matches)
       document.documentElement.classList.toggle('dark', dark)
       // Android 殼：狀態列與導覽列跟著換色（手動選了跟系統相反的深淺色時才看得出差別）
-      window.RoutinaWeaveSystemBars?.setDark(dark)
+      const systemBars = window.RoutinaWeaveSystemBars
+      if (systemBars) notifyBridge(systemBars, { dark })
     }
     apply()
     media.addEventListener('change', apply)
@@ -109,6 +117,6 @@ function useThemeClass() {
 
 declare global {
   interface Window {
-    RoutinaWeaveSystemBars?: { setDark(dark: boolean): void }
+    RoutinaWeaveSystemBars?: BridgePort
   }
 }

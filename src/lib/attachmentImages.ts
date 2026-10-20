@@ -1,4 +1,5 @@
 import { getAttachment } from '@/storage/db'
+import { attachmentObjectUrl } from './imageTypes'
 
 /**
  * 把 root 裡 <img data-attachment="id"> 的圖從 IndexedDB 讀出來補上。
@@ -11,12 +12,12 @@ export function fillAttachmentImages(root: HTMLElement): () => void {
     const id = img.dataset.attachment!
     void getAttachment(id).then((a) => {
       if (cancelled) return
-      if (!a) {
-        // 附件不見了（例如只匯入了 .md）：把縮圖框藏起來，卡片只留文字
+      // 附件不見了（例如只匯入了 .md）或不是點陣圖：把縮圖框藏起來，卡片只留文字
+      const url = a && attachmentObjectUrl(a)
+      if (!url) {
         img.closest<HTMLElement>('.link-card-thumb')?.remove()
         return
       }
-      const url = URL.createObjectURL(a.blob)
       urls.push(url)
       img.src = url
     })

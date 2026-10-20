@@ -3,6 +3,7 @@ import { syntaxTree } from '@codemirror/language'
 import type { Range } from '@codemirror/state'
 import { attachmentIdFromSrc } from '@/notes/images'
 import { getAttachment } from '@/storage/db'
+import { attachmentObjectUrl } from '@/lib/imageTypes'
 
 /**
  * 編輯器裡直接顯示圖片：游標不在那一行時，![說明](路徑) 換成圖片本身。
@@ -30,11 +31,12 @@ class ImageWidget extends WidgetType {
     const id = attachmentIdFromSrc(this.src)
     if (id) {
       void getAttachment(id).then((a) => {
-        if (!a) {
+        // 不是點陣圖（舊資料裡的 SVG 之類）也當成不見了，不建 blob: 網址
+        const url = a && attachmentObjectUrl(a)
+        if (!url) {
           wrap.textContent = '（圖片不見了）'
           return
         }
-        const url = URL.createObjectURL(a.blob)
         objectUrls.set(wrap, url)
         img.src = url
       })

@@ -1,4 +1,4 @@
-import { renderMarkdown, toggleTask } from './render'
+import { renderMarkdown, sanitizeHtml, toggleTask } from './render'
 
 const ctx = { exists: (t: string) => t === '有' }
 
@@ -33,6 +33,103 @@ describe('renderMarkdown', () => {
     // 轉義成文字顯示，不會變成真的標籤或連結
     expect(html).not.toContain('<img')
     expect(html).not.toContain('href="javascript:')
+  })
+})
+
+/** 惡意 Markdown：輸出不能有腳本、事件屬性、危險的 href 或 style */
+const PAYLOADS = [
+  '[a](javascript:alert(1))',
+  '[a](JaVaScRiPt:alert(1))',
+  '[a](&#106;avascript:alert(1))',
+  '[a](java\tscript:alert(1))',
+  '<javascript:alert(1)>',
+  '[a][r]\n\n[r]: javascript:alert(1)',
+  '[a](vbscript:msgbox(1))',
+  '[a](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)',
+  '![x](data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+)',
+  '[a](file:///etc/passwd)',
+  '[a](//evil.example/phish)',
+  '[a](/other-app/)',
+  '[a](blob:https://a.example/x)',
+  '[a](intent://x#Intent;end)',
+  '[a](https://x.example "t\\" onmouseover=alert(1) x=\\"")',
+  '[[a" onmouseover="alert(1)]]',
+  '[[<img src=x onerror=alert(1)>|<svg onload=alert(1)>]]',
+  ' #tag"onx=1',
+  '<span style="color:red;background:url(https://evil/x)">x</span>',
+  '<mark style="background:rgba(1,2,3) url(x)">x</mark>',
+  '<span style="color:#fff"><img src=x onerror=alert(1)>[a](javascript:alert(1))</span>',
+  '<div style="position:fixed;inset:0">clickjack</div><iframe src="https://evil"></iframe>',
+  '<style>*{display:none}</style>',
+  '> [!tip" onclick="alert(1)] t',
+  '> [!tip] <img src=x onerror=alert(1)>',
+  '- [ ] <img src=x onerror=alert(1)>',
+  '![a" onerror="alert(1)](_attachments/abc.jpg)',
+  '```cardlink\nurl: https://a.example/"><script>alert(1)</script>\ntitle: <img src=x onerror=alert(1)>\nthumbnail: x" onerror="alert(1)\n```',
+  '```cardlink\nurl: javascript:alert(1)//https://\n```',
+  '```"><img src=x onerror=alert(1)>\ncode\n```',
+]
+
+describe('renderMarkdown 擋惡意內容', () => {
+  it.each(PAYLOADS)('%s', (payload) => {
+    const root = document.createElement('div')
+    root.innerHTML = renderMarkdown(payload, ctx)
+    expect(root.querySelector('script, iframe, style, svg, object, embed, form')).toBeNull()
+    for (const el of root.querySelectorAll('*')) {
+      for (const attr of el.attributes) expect(attr.name).not.toMatch(/^on/i)
+      const href = el.getAttribute('href')
+      if (href !== null) expect(href).toMatch(/^(?:https?:|mailto:|#)/i)
+      const style = el.getAttribute('style')
+      if (style !== null) expect(style).toMatch(/^(?:color|background):(?:#[0-9a-f]+|rgba?\([\d., ]+\))$/i)
+    }
+  })
+
+  it('會在原分頁導走的連結拿掉 href', () => {
+    for (const md of ['[a](//evil.example/phish)', '[a](/other-app/)', '[a](blob:https://a.example/x)', '[a](https:/other-app/)', '[a](https:evil.example)']) {
+      expect(renderMarkdown(md, ctx)).not.toContain('href')
+    }
+  })
+
+  it('原始 HTML 的 svg、form、id/name、srcset 一律拿掉', () => {
+    const html = sanitizeHtml('<svg><a xlink:href="//evil">x</a></svg><form action="//evil"><input></form><a id="google" name="x" href="#">y</a><img srcset="https://evil/a.png 1x">')
+    expect(html).not.toMatch(/<svg|<form|id=|name=|srcset|xlink/)
+  })
+
+  it('站內連結、http(s)、mailto 照常保留', () => {
+    expect(renderMarkdown('[a](#/page/abc)', ctx)).toContain('href="#/page/abc"')
+    expect(renderMarkdown('[a](https://a.example)', ctx)).toContain('href="https://a.example"')
+    expect(renderMarkdown('<a@b.example>', ctx)).toContain('href="mailto:a@b.example"')
+    expect(renderMarkdown('[[有]]', ctx)).toContain('href="#"')
+  })
+
+  it('連結卡片的 target、rel 與待辦的 type 沒被刪掉', () => {
+    const card = renderMarkdown('```cardlink\nurl: https://a.example\n```', ctx)
+    expect(card).toContain('target="_blank"')
+    expect(card).toContain('rel="noopener noreferrer"')
+    expect(renderMarkdown('- [ ] 一', ctx)).toContain('type="checkbox"')
+  })
+
+  it('上色規則產生的 style 保留', () => {
+    expect(renderMarkdown('<span style="color:#e5484d">紅</span>', ctx)).toContain('style="color:#e5484d"')
+    expect(renderMarkdown('<mark style="background-color:rgba(255, 200, 0, 0.35)">黃</mark>', ctx)).toContain(
+      'style="background:rgba(255, 200, 0, 0.35)"',
+    )
+    expect(renderMarkdown('==螢光==', ctx)).toContain('style="background:rgba(255, 200, 0, 0.35)"')
+  })
+})
+
+describe('sanitizeHtml', () => {
+  it('style 只留顏色，其他寫法整個刪掉', () => {
+    expect(sanitizeHtml('<span style="color:#e5484d">x</span>')).toContain('style="color:#e5484d"')
+    expect(sanitizeHtml('<div style="position:fixed;inset:0">x</div>')).toBe('<div>x</div>')
+    expect(sanitizeHtml('<span style="color:#fff;background:url(https://evil/x)">x</span>')).toBe('<span>x</span>')
+  })
+
+  it('href 只留 http(s)、mailto 與 #', () => {
+    expect(sanitizeHtml('<a href="//evil.example">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href="intent://x#Intent;end">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href="javascript:alert(1)">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href="#/tag/x">x</a>')).toBe('<a href="#/tag/x">x</a>')
   })
 })
 

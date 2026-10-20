@@ -242,6 +242,33 @@ describe('zip', () => {
     expect(files.map((f) => f.path)).toEqual(['ok.md'])
   })
 
+  it('附件只認點陣圖副檔名：SVG、HTML 存成 octet-stream', () => {
+    const data = zipSync({
+      '_attachments/evil.svg': strToU8('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'),
+      '_attachments/page.html': strToU8('<script>alert(1)</script>'),
+      '_attachments/noext': strToU8('x'),
+      '_attachments/a.PNG': strToU8('x'),
+      '_attachments/b.jpeg': strToU8('x'),
+      '_attachments/c.bmp': strToU8('x'),
+    })
+    const { attachments } = readImportSources([{ name: 'x.zip', bytes: data }])
+    const types = Object.fromEntries(attachments.map((a) => [a.id, [a.type, a.blob.type]]))
+    const unknown = ['application/octet-stream', 'application/octet-stream']
+    expect(types).toEqual({
+      evil: unknown,
+      page: unknown,
+      noext: unknown,
+      a: ['image/png', 'image/png'],
+      b: ['image/jpeg', 'image/jpeg'],
+      c: ['image/bmp', 'image/bmp'],
+    })
+  })
+
+  it('匯出時舊的 SVG 附件不用 .svg 副檔名', async () => {
+    const svg = { id: 'old', type: 'image/svg+xml', blob: new Blob(['<svg/>'], { type: 'image/svg+xml' }) }
+    expect(Object.keys(unzipSync(await buildExportZip([], [svg])))).toEqual(['_attachments/old.bin'])
+  })
+
   it('檔案太多時拒絕', () => {
     const many: Record<string, Uint8Array> = {}
     for (let i = 0; i < 5001; i++) many[`${i}.md`] = new Uint8Array()

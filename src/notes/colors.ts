@@ -48,7 +48,7 @@ export function colorTags(kind: ColorKind, value: string): { open: string; close
 }
 
 /** 只接受 #hex 與 rgb()/rgba()，其他寫法（url()、expression…）一律當成普通文字 */
-const COLOR_VALUE = String.raw`#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*[\d.]+\s*)?\)`
+export const COLOR_VALUE = String.raw`#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*[\d.]+\s*)?\)`
 
 /** 開頭標籤，group 1 是 span/mark，group 2 是顏色值 */
 export const COLOR_OPEN = new RegExp(String.raw`^<(span) style="color:\s*(${COLOR_VALUE})\s*;?">|^<(mark) style="background(?:-color)?:\s*(${COLOR_VALUE})\s*;?">`)

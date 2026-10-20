@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  ChevronRight, Hash, Link2, Network, Plus, Search, Settings, Stamp,
+  ChevronRight, Cloud, CloudOff, Hash, Link2, Network, Plus, Search, Settings, Stamp,
 } from 'lucide-react'
 import { useNotes, childrenOf } from '@/store/notes'
 import { navigate, useRoute, type Route } from '@/store/route'
@@ -8,6 +8,8 @@ import { useUi } from '@/store/ui'
 import { allTags } from '@/notes/markdown'
 import { NoteIcon } from '@/components/common/Thumbnail'
 import { cn } from '@/lib/utils'
+import { useSync } from '@/sync/service'
+import { SyncStatusText } from '@/components/sync/SyncStatusText'
 import type { Note } from '@/notes/types'
 
 export function Sidebar() {
@@ -91,7 +93,25 @@ export function Sidebar() {
           ))}
         </Section>
       )}
+
+      <SyncFooter onOpen={() => go({ kind: 'settings' })} />
     </nav>
+  )
+}
+
+/** 側邊欄最下面的同步狀態，沒連線就不顯示 */
+function SyncFooter({ onOpen }: { onOpen: () => void }) {
+  const status = useSync((s) => s.status)
+  if (status === 'unavailable' || status === 'disconnected') return null
+  const trouble = status !== 'idle' && status !== 'syncing'
+  return (
+    <button
+      onClick={onOpen}
+      className="mt-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted"
+    >
+      {trouble ? <CloudOff className="size-3.5 shrink-0 text-amber-500" /> : <Cloud className="size-3.5 shrink-0" />}
+      <SyncStatusText className="min-w-0 flex-1" />
+    </button>
   )
 }
 

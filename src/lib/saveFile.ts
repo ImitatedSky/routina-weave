@@ -1,20 +1,21 @@
-// Android App 注入的存檔 bridge（android/.../FileSaver.kt）。網頁版沒有它，改用下載。
-interface FileBridge {
-  saveFile(id: string, base64: string, filename: string, mimeType: string): void
-}
+import { askBridge, inAndroidShell, type BridgePort } from './nativeBridge'
 
-type BridgeStatus = 'saved' | 'cancelled' | 'error'
+/**
+ * Android App 注入的存檔 bridge（android/.../FileSaver.kt）。網頁版沒有它，改用下載。
+ * 送 `{"base64":…,"filename":…,"mimeType":…}`，回覆 `{"status":"saved"|"cancelled"|"error","message":…}`。
+ */
+interface BridgeResult {
+  status?: string
+  message?: string
+}
 
 declare global {
   interface Window {
-    RoutinaWeaveFiles?: FileBridge
-    __weaveSaveResult?: (id: string, status: BridgeStatus, message: string) => void
+    RoutinaWeaveFiles?: BridgePort
   }
 }
 
 export type SaveResult = 'saved' | 'cancelled'
-
-const pending = new Map<string, { resolve: (r: SaveResult) => void; reject: (e: Error) => void }>()
 
 // bridge 只傳代碼（decode / dialog / write），後面可能接「:例外訊息」
 const ERROR_TEXT: Record<string, string> = {
@@ -29,14 +30,6 @@ function errorMessage(message: string): string {
   const detail = colon < 0 ? '' : message.slice(colon + 1).trim()
   const text = ERROR_TEXT[code] ?? '存檔失敗'
   return detail ? `${text}（${detail}）` : text
-}
-
-function onBridgeResult(id: string, status: BridgeStatus, message: string) {
-  const request = pending.get(id)
-  if (!request) return
-  pending.delete(id)
-  if (status === 'error') request.reject(new Error(errorMessage(message)))
-  else request.resolve(status)
 }
 
 function toBase64(blob: Blob): Promise<string> {
@@ -63,14 +56,18 @@ function downloadBlob(blob: Blob, filename: string) {
 export async function saveFile(blob: Blob, filename: string): Promise<SaveResult> {
   const bridge = window.RoutinaWeaveFiles
   if (!bridge) {
+    // WebView 不處理 blob: 下載，點了不會有任何反應，不能假裝存好了
+    if (inAndroidShell()) throw new Error('存檔失敗：請更新「Android System WebView」後再試')
     downloadBlob(blob, filename)
     return 'saved'
   }
-  window.__weaveSaveResult ??= onBridgeResult
   const base64 = await toBase64(blob)
-  const id = crypto.randomUUID()
-  return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject })
-    bridge.saveFile(id, base64, filename, blob.type || 'application/octet-stream')
+  // 使用者可能停在「另存新檔」畫面很久，不設逾時
+  const result = await askBridge<BridgeResult>(bridge, {
+    base64,
+    filename,
+    mimeType: blob.type || 'application/octet-stream',
   })
+  if (result?.status === 'saved' || result?.status === 'cancelled') return result.status
+  throw new Error(errorMessage(typeof result?.message === 'string' ? result.message : ''))
 }

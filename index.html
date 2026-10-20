@@ -8,14 +8,9 @@
     <link rel="icon" type="image/png" href="/routina-weave/icon-192.png" />
     <link rel="apple-touch-icon" href="/routina-weave/apple-touch-icon.png" />
     <title>Routina Weave</title>
-    <script>
-      // 在 React 載入前就決定深淺色，避免先閃一下白底
-      try {
-        var t = localStorage.getItem('weave-theme')
-        var dark = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
-        if (dark) document.documentElement.classList.add('dark')
-      } catch (e) {}
-    </script>
+    <!-- 一般的同步 script（不是 module）：畫面出來前就跑完，深色模式才不會先閃白底。
+         檔案在 public/，原樣複製不打包，所以加 vite-ignore -->
+    <script src="/routina-weave/theme.js" vite-ignore></script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,22 +1,21 @@
 package com.routina.weave
 
-import android.webkit.JavascriptInterface
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowInsetsControllerCompat
 
 /**
  * 狀態列與導覽列跟著網頁的深淺色走。主題（values / values-night）只認得系統的深淺色，
  * 使用者在 App 裡手動選了相反的顏色時，要靠網頁通知這裡。
- * 網頁端：`RoutinaWeaveSystemBars.setDark(true | false)`（src/App.tsx 的 useThemeClass）。
+ * 網頁端對 `RoutinaWeaveSystemBars` 送 `{"dark":true | false}`（src/App.tsx 的 useThemeClass），不回覆。
  */
 class SystemBars(private val activity: ComponentActivity) {
 
-    val bridge = Bridge()
-
-    inner class Bridge {
-        @JavascriptInterface
-        fun setDark(dark: Boolean) {
-            activity.runOnUiThread { apply(dark) }
+    fun register(webView: WebView) {
+        // 在主執行緒執行，可以直接改視窗
+        WebBridge.register(webView, BRIDGE_NAME) { data, _ ->
+            val json = WebBridge.parse(data) ?: return@register
+            apply(json.optBoolean("dark"))
         }
     }
 

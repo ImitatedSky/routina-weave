@@ -1,4 +1,5 @@
 import { useNotes, childrenOf, pathOf, descendants } from './notes'
+import type { Note } from '@/notes/types'
 
 beforeEach(() => {
   useNotes.setState({ loaded: true, notes: {} })
@@ -26,8 +27,12 @@ describe('notes store', () => {
     const { createNote } = useNotes.getState()
     const a = createNote({ title: '舊名' })
     const b = createNote({ title: 'B', body: '看 [[舊名]]' })
+    const before = useNotes.getState().notes[b.id].updated
     useNotes.getState().updateNote(a.id, { title: '新名' })
     expect(useNotes.getState().notes[b.id].body).toBe('看 [[新名]]')
+    // 連結被改的那則也算修改過，雲端同步才會把它傳上去
+    expect(useNotes.getState().notes[b.id].updated >= before).toBe(true)
+    expect(useNotes.getState().notes[b.id].updated).toBe(useNotes.getState().notes[a.id].updated)
   })
 
   it('刪除時連同子頁面', () => {
@@ -125,5 +130,48 @@ describe('子頁面對照表與快取', () => {
     const notes = useNotes.getState().notes
     expect(allTags(notes[a.id])).toEqual(['新'])
     expect([...buildLinkGraph(Object.values(notes)).incoming.get(target.id)!]).toEqual([a.id])
+  })
+})
+
+describe('removeNotes（雲端同步用）', () => {
+  it('只刪指定的筆記，子頁面留著', () => {
+    const { createNote } = useNotes.getState()
+    const a = createNote({ title: 'A' })
+    const b = useNotes.getState().createNote({ title: 'B', parent: a.id })
+    useNotes.getState().removeNotes([a.id])
+    const notes = useNotes.getState().notes
+    expect(notes[a.id]).toBeUndefined()
+    expect(notes[b.id]).toBeDefined()
+  })
+  it('importNotes／removeNotes：畫面當下就更新，回傳的 promise 等寫進 IndexedDB', async () => {
+    const db = await import('@/storage/db')
+    const note: Note = { id: 'sync-1', title: 'S', body: '', parent: null, order: 0, tags: [], props: {}, created: 'x', updated: 'x' }
+    const imported = useNotes.getState().importNotes([note])
+    expect(useNotes.getState().notes['sync-1']).toBeDefined()
+    await imported
+    expect((await db.loadNotes()).some((n) => n.id === 'sync-1')).toBe(true)
+
+    const removed = useNotes.getState().removeNotes(['sync-1'])
+    expect(useNotes.getState().notes['sync-1']).toBeUndefined()
+    await removed
+    expect((await db.loadNotes()).some((n) => n.id === 'sync-1')).toBe(false)
+  })
+})
+
+describe('上層不存在的頁面', () => {
+  it('上層找不到或指向自己時當成最上層，側邊欄才看得到', () => {
+    const { createNote } = useNotes.getState()
+    const ok = createNote({ title: '正常' })
+    const child = useNotes.getState().createNote({ title: '子頁', parent: ok.id })
+    const orphan = useNotes.getState().createNote({ title: '孤兒', parent: 'gone' })
+    const self = useNotes.getState().createNote({ title: '自己' })
+    useNotes.getState().updateNote(self.id, { parent: self.id })
+
+    const notes = useNotes.getState().notes
+    expect(childrenOf(notes, null).map((n) => n.title).sort()).toEqual(['孤兒', '正常', '自己'].sort())
+    expect(childrenOf(notes, ok.id).map((n) => n.id)).toEqual([child.id])
+    expect(childrenOf(notes, self.id)).toEqual([])
+    expect(descendants(notes, self.id)).toEqual([])
+    expect(pathOf(notes, orphan.id).map((n) => n.id)).toEqual([orphan.id])
   })
 })

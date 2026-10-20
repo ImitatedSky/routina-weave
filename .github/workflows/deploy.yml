@@ -5,34 +5,68 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# 預設只給讀權限；只有最後發布的 job 拿得到寫入權限
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: gh-pages-deploy
   cancel-in-progress: true
 
 jobs:
-  build-deploy:
+  # 會執行第三方套件程式碼（npm ci / test / build）的 job 只有讀權限，
+  # checkout 也不把 token 留在 .git/config
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # 依賴都不需要 install script（native binding 走 optionalDependencies），
+      # 關掉可以擋掉套件被入侵時最常見的 postinstall 攻擊
+      - run: npm ci --ignore-scripts
 
       - run: npm test
 
-      - run: npm run build
+      # Google 網頁用戶端 ID（不是秘密，放 repository variable，見 docs/google-setup.md）。
+      # 變數沒設時不要匯出空字串，不然會蓋掉 .env.production 裡的值
+      - run: |
+          if [ -n "$GOOGLE_CLIENT_ID" ]; then export VITE_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"; fi
+          npm run build
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
 
       # 路由用網址的 hash，不需要 404.html 的 SPA fallback；.nojekyll 讓 _ 開頭的檔案照常發布
       - run: touch dist/.nojekyll
 
-      - uses: peaceiris/actions-gh-pages@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # 只做發布，不 checkout、不跑任何 npm，寫入權限只在這裡
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+
+      - uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist

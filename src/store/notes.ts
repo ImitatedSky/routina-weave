@@ -4,9 +4,7 @@ import { renameLinks } from '@/notes/links'
 import { fromTemplate } from '@/notes/templates'
 import * as db from '@/storage/db'
 import { seedNotes } from '@/notes/seed'
-import { cardThumbnails } from '@/notes/cardlink'
-import { coverAttachment } from '@/notes/covers'
-import { bodyImageAttachments } from '@/notes/images'
+import { attachmentsOf } from '@/notes/attachments'
 
 /**
  * 所有筆記都在記憶體裡（個人筆記量級，幾千則也只有幾 MB），
@@ -23,8 +21,10 @@ interface NotesState {
   deleteNote: (id: string) => string[]
   /** 搬到別的上層頁面。不能搬到自己底下 */
   moveNote: (id: string, parent: string | null) => boolean
-  /** 匯入：同 id 覆蓋、其他新增 */
-  importNotes: (notes: Note[]) => void
+  /** 匯入：同 id 覆蓋、其他新增。畫面立刻更新，promise 等寫進 IndexedDB */
+  importNotes: (notes: Note[]) => Promise<void>
+  /** 雲端同步刪掉的筆記：只刪這幾則，不連帶刪子頁面（雲端上每則是獨立的檔案）。promise 等寫進 IndexedDB */
+  removeNotes: (ids: string[]) => Promise<void>
 }
 
 let initPromise: Promise<void> | null = null
@@ -41,6 +41,8 @@ export const useNotes = create<NotesState>((set, get) => ({
         list = seedNotes()
         await db.saveNotes(list)
         await db.setMeta('seeded', true)
+        // 記下示範筆記：第二台裝置連上雲端時，沒動過的示範筆記要先拿掉，不然會出現兩份
+        await db.setMeta('seed-ids', list.map((n) => n.id))
       }
       set({ loaded: true, notes: Object.fromEntries(list.map((n) => [n.id, n])) })
     })()
@@ -90,7 +92,8 @@ export const useNotes = create<NotesState>((set, get) => ({
         if (other.id === id) continue
         const body = renameLinks(other.body, current.title, patch.title)
         if (body !== other.body) {
-          next[other.id] = { ...other, body }
+          // 內容變了就要更新 updated，雲端同步靠它判斷「本機改過」
+          next[other.id] = { ...other, body, updated: updated.updated }
           changed.push(next[other.id])
         }
       }
@@ -120,18 +123,20 @@ export const useNotes = create<NotesState>((set, get) => ({
 
   importNotes(list) {
     set({ notes: { ...get().notes, ...Object.fromEntries(list.map((n) => [n.id, n])) } })
-    void db.saveNotes(list)
+    return db.saveNotes(list)
+  },
+
+  removeNotes(ids) {
+    const notes = get().notes
+    const next = { ...notes }
+    const attachments = ids.flatMap((id) => (next[id] ? attachmentsOf(next[id]) : []))
+    for (const id of ids) delete next[id]
+    set({ notes: next })
+    const saved = db.deleteNotes(ids)
+    releaseAttachments(next, attachments)
+    return saved
   },
 }))
-
-/** 這則筆記用到的附件：網址縮圖、封面圖片、內文連結卡片的縮圖、內文上傳的圖片 */
-export function attachmentsOf(note: Note): string[] {
-  const ids = [...cardThumbnails(note.body), ...bodyImageAttachments(note.body)]
-  if (note.image) ids.push(note.image)
-  const cover = coverAttachment(note.cover)
-  if (cover) ids.push(cover)
-  return ids
-}
 
 /**
  * 刪掉已經沒有筆記在用的附件。同一張圖可能被好幾則共用
@@ -162,9 +167,11 @@ function childIndex(notes: Record<string, Note>): Map<string | null, Note[]> {
   if (!index) {
     index = new Map()
     for (const n of Object.values(notes)) {
-      const list = index.get(n.parent)
+      // 上層不存在（同步只下載到子頁面、上層被刪）或指向自己：當成最上層，不然側邊欄看不到
+      const parent = n.parent && n.parent !== n.id && notes[n.parent] ? n.parent : null
+      const list = index.get(parent)
       if (list) list.push(n)
-      else index.set(n.parent, [n])
+      else index.set(parent, [n])
     }
     for (const list of index.values()) list.sort((a, b) => a.order - b.order || a.created.localeCompare(b.created))
     childIndexCache.set(notes, index)

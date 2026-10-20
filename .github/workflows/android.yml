@@ -14,15 +14,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# 拆成三個 job，讓 npm 套件碰不到簽章金鑰，建置過程也碰不到寫入 repo 的權限：
+#   web     跑 npm（沒有 secret、只有讀權限）
+#   apk     用 keystore 簽 APK（不跑 npm）
+#   release 只負責建立 Release（唯一有寫入權限的 job）
 jobs:
-  release:
-    name: Signed release
+  web:
+    name: Build web
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Hub 靠 tag 的版號跟已安裝的 versionName 比對來判斷有沒有新版，
       # 兩者不一致就會誤判。在這裡擋下來，比事後除錯便宜。
@@ -39,18 +43,52 @@ jobs:
           fi
           echo "tag $GITHUB_REF_NAME matches versionName $VN"
 
+      # 正式版建置不用快取，避免吃到被汙染的快取（setup-node 文件對高權限流程的建議）
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: npm
+          package-manager-cache: false
 
+      # 依賴都不需要 install script（native binding 走 optionalDependencies）
       - name: Install web dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # 與網頁版完全相同的建置指令，所以 App 裡的內容永遠跟網頁一致
+      # Google 網頁用戶端 ID 跟 deploy.yml 一樣傳進去，App 裡的網頁才跟網頁版完全相同
+      # （Android 的授權走原生，實際上用不到這個 ID）
       - name: Build web
-        run: npm run build
+        run: |
+          if [ -n "$GOOGLE_CLIENT_ID" ]; then export VITE_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"; fi
+          npm run build
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+
+      - name: Upload web build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-dist
+          path: dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  apk:
+    name: Signed APK
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Gradle 會把 repo 根目錄的 dist/ 複製進 APK 的 assets
+      - name: Download web build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-dist
+          path: dist
 
       - name: Set up JDK 17
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -59,7 +97,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
         with:
           # 這個 action 預設會安裝已被 Google 下架的舊 'tools' 套件，
           # runner 的 cmdline-tools 升級後 sdkmanager 就找不到它而整步失敗。
@@ -76,10 +114,13 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::KEYSTORE_BASE64 not set; refusing to publish an unsigned release"
-            exit 1
-          fi
+          # 任何一個沒設，Gradle 會默默改用 debug 金鑰簽，所以四個都要檢查
+          for var in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!var}" ]; then
+              echo "::error::$var not set; refusing to publish a release that is not signed with the release key"
+              exit 1
+            fi
+          done
           # 密碼必須是純 ASCII。常見雷：用中文輸入法打密碼時把半形「-」變成全形「－」，
           # Java 簽章會丟「Password is not ASCII」而且不會說原因。
           for var in KEYSTORE_PASSWORD KEY_PASSWORD; do
@@ -103,13 +144,45 @@ jobs:
           export KEYSTORE_FILE="$KEYSTORE_PATH"
           ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      # 每個標籤都是獨立且永久保留的 Release。檔名帶 routina-weave- 是為了
-      # 和家族其他成員的 APK 一眼分得出來，Hub 的名冊也靠它比對。
+      # 確認真的是用正式金鑰簽的：簽錯的話 Hub 更新會裝不上，Google 登入也會因 SHA-1 對不上而失敗
+      - name: Verify signing certificate
+        run: |
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner"
+          if ! "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk             | grep -qi 'SHA-256 digest: 563e24f9c6796daacb8cc6ddc2d8f3b3075762cf7f2a4d7ff1c37174ed7f74b5'; then
+            echo "::error::APK is not signed with the Routina release certificate"
+            exit 1
+          fi
+
+      # 檔名帶 routina-weave- 是為了和家族其他成員的 APK 一眼分得出來，Hub 的名冊也靠它比對。
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "routina-weave-${GITHUB_REF_NAME}.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apk
+          path: routina-weave-${{ github.ref_name }}.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  # 每個標籤都是獨立且永久保留的 Release。這個 job 不 checkout、不跑任何建置。
+  release:
+    name: Publish GitHub Release
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: apk
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk "routina-weave-${GITHUB_REF_NAME}.apk"
           gh release create "$GITHUB_REF_NAME" \
             "routina-weave-${GITHUB_REF_NAME}.apk" \
             --title "Routina Weave ${GITHUB_REF_NAME}" \

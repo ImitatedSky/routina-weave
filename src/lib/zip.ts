@@ -3,6 +3,7 @@ import { parse } from 'yaml'
 import { fromMarkdown, toMarkdown } from '@/notes/markdown'
 import type { Note } from '@/notes/types'
 import type { Attachment } from '@/storage/db'
+import { IMAGE_EXTENSIONS, UNKNOWN_TYPE, imageTypeOfExtension } from './imageTypes'
 
 /**
  * 整包匯出／匯入。zip 的結構和 Notion 匯出一樣，子頁面放在與上層同名的資料夾裡：
@@ -29,24 +30,8 @@ const MAX_FILES = 5000
 const FORBIDDEN_CHARS = '\\/:*?"<>|'
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i
 
-const EXTENSIONS: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/avif': 'avif',
-  'image/svg+xml': 'svg',
-}
-
-const MIME_TYPES: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-  gif: 'image/gif',
-  avif: 'image/avif',
-  svg: 'image/svg+xml',
-}
+// 附件只收點陣圖（不收 SVG），見 lib/imageTypes.ts
+export const EXTENSIONS = IMAGE_EXTENSIONS
 
 // ---- 檔名 ----
 
@@ -223,7 +208,8 @@ export function readImportSources(sources: ImportSource[]): ImportBundle {
       } else if (segments.length === 2 && segments[0] === ATTACHMENTS_DIR) {
         const dot = name.lastIndexOf('.')
         const id = dot > 0 ? name.slice(0, dot) : name
-        const type = MIME_TYPES[name.slice(dot + 1).toLowerCase()] ?? 'application/octet-stream'
+        // 只看副檔名白名單：.svg 和其他檔案都存成 application/octet-stream，不會當圖片顯示
+        const type = dot > 0 ? imageTypeOfExtension(name.slice(dot + 1)) : UNKNOWN_TYPE
         attachments.push({ id, type, blob: new Blob([bytes as Uint8Array<ArrayBuffer>], { type }) })
       }
     }

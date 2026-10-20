@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { Note } from '@/notes/types'
+import { safeAttachment } from '@/lib/imageTypes'
 
 /**
  * 本機儲存。筆記存成結構化物件（不是 .md 字串），讀寫快、也好建索引；
@@ -53,8 +54,9 @@ export async function getAttachment(id: string): Promise<Attachment | undefined>
   return (await db()).get('attachments', id)
 }
 
+/** 所有附件都從這裡存：不是點陣圖的一律存成 application/octet-stream（見 lib/imageTypes.ts） */
 export async function putAttachment(attachment: Attachment): Promise<void> {
-  await (await db()).put('attachments', attachment)
+  await (await db()).put('attachments', safeAttachment(attachment))
 }
 
 export async function deleteAttachment(id: string): Promise<void> {

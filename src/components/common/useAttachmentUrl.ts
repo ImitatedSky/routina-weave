@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getAttachment } from '@/storage/db'
+import { attachmentObjectUrl } from '@/lib/imageTypes'
 
 /** 附件 id → object URL。元件卸載或 id 改變時釋放 */
 export function useAttachmentUrl(id: string | undefined): string | undefined {
@@ -11,8 +12,9 @@ export function useAttachmentUrl(id: string | undefined): string | undefined {
     let cancelled = false
     void getAttachment(id).then((a) => {
       if (cancelled || !a) return
-      objectUrl = URL.createObjectURL(a.blob)
-      setLoaded({ id, url: objectUrl })
+      // 不是點陣圖（舊資料裡的 SVG 之類）就不顯示
+      objectUrl = attachmentObjectUrl(a)
+      if (objectUrl) setLoaded({ id, url: objectUrl })
     })
     return () => {
       cancelled = true

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fakeBridgePort } from './fakeBridgePort'
 import { fetchLinkPreview, siteOf } from './linkPreview'
 
 afterEach(() => {
@@ -6,13 +7,11 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** 模擬原生 bridge：收到請求後非同步回呼 */
+/** 模擬原生 bridge：收到請求後非同步回覆 */
 function mockBridge(result: object) {
-  window.RoutinaWeaveLinks = {
-    fetchPreview(id) {
-      setTimeout(() => window.__weavePreviewResult?.(id, JSON.stringify(result)), 0)
-    },
-  }
+  const port = fakeBridgePort(() => result)
+  window.RoutinaWeaveLinks = port
+  return port
 }
 
 describe('fetchLinkPreview', () => {
@@ -21,8 +20,9 @@ describe('fetchLinkPreview', () => {
   })
 
   it('bridge 的結果整理後回傳，縮圖轉成 Blob', async () => {
-    mockBridge({ ok: true, title: '  標題\n 換行 ', description: '說'.repeat(600), image: btoa('\x01\x02') })
+    const port = mockBridge({ ok: true, title: '  標題\n 換行 ', description: '說'.repeat(600), image: btoa('\x01\x02') })
     const preview = await fetchLinkPreview('https://example.com')
+    expect(port.sent).toEqual([{ id: expect.any(String), url: 'https://example.com' }])
     expect(preview.title).toBe('標題 換行')
     expect(Array.from(preview.description!)).toHaveLength(500)
     expect(preview.site).toBe('example.com')
@@ -37,7 +37,7 @@ describe('fetchLinkPreview', () => {
 
   it('20 秒沒回應就放棄', async () => {
     vi.useFakeTimers()
-    window.RoutinaWeaveLinks = { fetchPreview() {} }
+    window.RoutinaWeaveLinks = fakeBridgePort()
     const promise = fetchLinkPreview('https://example.com')
     await vi.advanceTimersByTimeAsync(20_000)
     expect(await promise).toEqual({ site: 'example.com' })

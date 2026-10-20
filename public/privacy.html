@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Routina Weave 隱私權政策</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fff; --fg: #1f1f1f; --muted: #666; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161412; --fg: #eee; --muted: #aaa; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.7 system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin-bottom: 0; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  hr { border: 0; border-top: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); margin: 3rem 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Routina Weave 隱私權政策</h1>
+<p class="muted">最後更新：2026-10-21</p>
+
+<p>Routina Weave 是一個筆記 App，網頁版在 pochunyeh.com/routina-weave，也有 Android 版。這份說明講清楚 Weave 會碰到哪些資料，以及怎麼處理。</p>
+
+<h2>筆記存在哪裡</h2>
+<p>筆記、圖片、設定都存在你自己的裝置上（瀏覽器的 IndexedDB 或 Android App 的資料）。Weave 沒有自己的伺服器，不會把你的筆記傳給開發者或任何第三方。</p>
+
+<h2>Google 雲端硬碟同步（選用）</h2>
+<ul>
+  <li>只有你在設定頁按「連線 Google 雲端硬碟」才會啟用。</li>
+  <li>Weave 只要求 <code>drive.file</code> 權限：只能讀寫 Weave 自己建立的檔案。你雲端硬碟裡的其他檔案，Weave 看不到也改不了。</li>
+  <li>筆記會以 .md 檔存在你雲端硬碟的「Routina Weave」資料夾，圖片存在裡面的「_attachments」資料夾。資料直接在你的裝置和 Google 之間傳輸，不經過其他伺服器。</li>
+  <li>Weave 會讀取你的 Google 帳號 email 與帳號 id，只用來在畫面上顯示連線的是哪個帳號，以及確認之後連線的是同一個帳號。這些資訊只存在你的裝置上。</li>
+  <li>存取權杖（access token）只放在記憶體或 Android 系統的 Google Play 服務裡，不會寫進檔案或傳給任何人。</li>
+  <li>Weave 對 Google 使用者資料的使用遵守 <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>，包含 Limited Use 規定：資料只用來提供同步功能，不用於廣告、不轉售、不讓人閱讀。</li>
+</ul>
+
+<h2>網址預覽</h2>
+<p>貼上網址時，Weave 會連到那個網站讀取標題和縮圖，好顯示成卡片。這個請求會讓那個網站知道有人造訪。</p>
+
+<h2>停止使用與刪除資料</h2>
+<ul>
+  <li>在設定頁按「中斷連線」會撤銷 Weave 的雲端硬碟權限。你也可以到 <a href="https://myaccount.google.com/connections">Google 帳戶的第三方連結</a> 移除。</li>
+  <li>雲端硬碟裡的「Routina Weave」資料夾是你的檔案，可以自己刪除。</li>
+  <li>本機資料可以用瀏覽器清除網站資料，或在 Android 解除安裝 App 來刪除。</li>
+</ul>
+
+<h2>聯絡</h2>
+<p>有任何問題請到 <a href="https://github.com/ImitatedSky/routina-weave/issues">GitHub</a> 回報。</p>
+
+<hr>
+
+<h1>Privacy Policy</h1>
+<p class="muted">Last updated: 2026-10-21</p>
+<p>Routina Weave is a notes app (web at pochunyeh.com/routina-weave and Android).</p>
+<ul>
+  <li>Notes, images and settings are stored only on your device. Weave has no server of its own and does not send your notes to the developer or any third party.</li>
+  <li>Google Drive sync is optional and starts only when you choose “Connect Google Drive”. Weave requests only the <code>drive.file</code> scope, so it can access only files it created. Notes are saved as .md files in a “Routina Weave” folder in your Drive; data goes directly between your device and Google.</li>
+  <li>Weave reads your Google account email and account id only to show which account is connected and to make sure later connections use the same account. They stay on your device.</li>
+  <li>Access tokens are kept in memory (web) or by Google Play services (Android) and are never written to files or shared.</li>
+  <li>Weave’s use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</li>
+  <li>When you paste a link, Weave fetches that page to show its title and thumbnail.</li>
+  <li>“Disconnect” in Settings revokes Drive access; you can also remove it at <a href="https://myaccount.google.com/connections">your Google Account</a>. The Drive folder is yours to delete.</li>
+  <li>Contact: <a href="https://github.com/ImitatedSky/routina-weave/issues">GitHub issues</a>.</li>
+</ul>
+</main>
+</body>
+</html>

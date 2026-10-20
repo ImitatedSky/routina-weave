@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { saveFile } from '@/lib/saveFile'
 import { buildExportZip, exportFilename, prepareImport, type PreparedImport } from '@/lib/zip'
 import { Button } from '@/components/ui/button'
+import { SyncSettings } from '@/components/sync/SyncSettings'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ export function SettingsView() {
         </div>
       </section>
 
+      <SyncSettings />
       <DataSection />
     </div>
   )
@@ -101,7 +103,7 @@ function DataSection() {
     try {
       // 附件先寫，筆記出現時縮圖就讀得到
       for (const attachment of pending.attachments) await putAttachment(attachment)
-      useNotes.getState().importNotes(pending.plan.notes)
+      await useNotes.getState().importNotes(pending.plan.notes)
       const { added, updated } = pending.plan
       toast.success(`已匯入：新增 ${added} 則、更新 ${updated} 則`)
     } catch (error) {
