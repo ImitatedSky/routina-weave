@@ -46,12 +46,15 @@ class GoogleAuth(private val activity: ComponentActivity) {
     ) { result ->
         val reply = pending ?: return@registerForActivityResult
         pending = null
-        if (result.resultCode != Activity.RESULT_OK) {
-            reply.send(failure("cancelled"))
+        // 按返回鍵關掉才是真的取消（沒有 data）。選完帳號後 Google 回報的錯誤（例如 App 還沒在
+        // Cloud Console 登記）也是 RESULT_CANCELED，真正原因在 data 的狀態碼裡，不能一律當成取消
+        val data = result.data
+        if (data == null) {
+            reply.send(failure(if (result.resultCode == Activity.RESULT_OK) "failed" else "cancelled"))
             return@registerForActivityResult
         }
         val auth = try {
-            client.getAuthorizationResultFromIntent(result.data)
+            client.getAuthorizationResultFromIntent(data)
         } catch (e: ApiException) {
             reply.send(failure(errorCode(e)))
             return@registerForActivityResult

@@ -35,7 +35,7 @@ const MESSAGES: Record<SignInErrorCode, string> = {
   'popup-blocked': '瀏覽器擋住了登入視窗，請允許彈出視窗後再試一次',
   denied: '需要允許存取 Google 雲端硬碟才能同步',
   unavailable: '這個版本無法連線 Google 帳號',
-  config: 'Google 帳號連線的設定有誤',
+  config: 'Google 還沒登記這個 App（需要先在 Google Cloud 建立 OAuth 用戶端）',
   network: '連不上網路，請稍後再試',
   failed: '連線 Google 帳號失敗',
 }
